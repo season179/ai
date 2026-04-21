@@ -6,6 +6,29 @@ import type {
 } from '@standard-schema/spec'
 import type { JSONSchema, SchemaInput } from '../../../types'
 
+type StandardProperties = Partial<
+  StandardJSONSchemaV1['~standard'] & StandardSchemaV1['~standard']
+>
+
+function getStandardProperties(
+  schema: unknown,
+): StandardProperties | undefined {
+  if (
+    (typeof schema !== 'object' && typeof schema !== 'function') ||
+    schema === null ||
+    !('~standard' in schema)
+  ) {
+    return undefined
+  }
+
+  const standard = schema['~standard']
+  if (typeof standard !== 'object' || standard === null) {
+    return undefined
+  }
+
+  return standard as StandardProperties
+}
+
 /**
  * Check if a value is a Standard JSON Schema compliant schema.
  * Standard JSON Schema compliant libraries (Zod v4+, ArkType, Valibot with toStandardJsonSchema, etc.)
@@ -14,16 +37,18 @@ import type { JSONSchema, SchemaInput } from '../../../types'
 export function isStandardJSONSchema(
   schema: unknown,
 ): schema is StandardJSONSchemaV1 {
+  const standardProps = getStandardProperties(schema)
+  if (!standardProps) {
+    return false
+  }
+
+  const jsonSchema = standardProps.jsonSchema
+
   return (
-    typeof schema === 'object' &&
-    schema !== null &&
-    '~standard' in schema &&
-    typeof (schema as StandardJSONSchemaV1)['~standard'] === 'object' &&
-    (schema as StandardJSONSchemaV1)['~standard'].version === 1 &&
-    typeof (schema as StandardJSONSchemaV1)['~standard'].jsonSchema ===
-      'object' &&
-    typeof (schema as StandardJSONSchemaV1)['~standard'].jsonSchema.input ===
-      'function'
+    standardProps.version === 1 &&
+    typeof jsonSchema === 'object' &&
+    jsonSchema !== null &&
+    typeof jsonSchema.input === 'function'
   )
 }
 
@@ -32,17 +57,13 @@ export function isStandardJSONSchema(
  * Standard Schema compliant libraries implement the '~standard' property with a validate function.
  */
 export function isStandardSchema(schema: unknown): schema is StandardSchemaV1 {
+  const standardProps = getStandardProperties(schema)
+  if (!standardProps) {
+    return false
+  }
+
   return (
-    typeof schema === 'object' &&
-    schema !== null &&
-    '~standard' in schema &&
-    typeof schema['~standard'] === 'object' &&
-    schema !== null &&
-    schema['~standard'] !== null &&
-    'version' in schema['~standard'] &&
-    schema['~standard'].version === 1 &&
-    'validate' in schema['~standard'] &&
-    typeof schema['~standard'].validate === 'function'
+    standardProps.version === 1 && typeof standardProps.validate === 'function'
   )
 }
 

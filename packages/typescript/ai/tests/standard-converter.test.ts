@@ -7,7 +7,66 @@ import {
   parseWithStandardSchema,
   validateWithStandardSchema,
 } from '../src/activities/chat/tools/schema-converter'
+import type {
+  StandardJSONSchemaV1,
+  StandardSchemaV1,
+} from '@standard-schema/spec'
 import type { JSONSchema } from '../src/types'
+
+type CallableStandardSchema = StandardJSONSchemaV1<{ foo: boolean }> &
+  StandardSchemaV1<{ foo: boolean }> &
+  ((value: unknown) => unknown)
+
+const callableSchemaJson: JSONSchema = {
+  type: 'object',
+  properties: {
+    foo: { type: 'boolean' },
+  },
+  required: ['foo'],
+}
+
+function createCallableStandardSchema(): CallableStandardSchema {
+  function callableSchema(): undefined {
+    return undefined
+  }
+
+  const schema = callableSchema as unknown as CallableStandardSchema
+
+  Object.assign(schema, {
+    '~standard': {
+      vendor: 'callable-test-schema',
+      version: 1 as const,
+      jsonSchema: {
+        input: () => ({
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          ...callableSchemaJson,
+        }),
+        output: () => callableSchemaJson,
+      },
+      validate: (value: unknown) => {
+        if (
+          typeof value === 'object' &&
+          value !== null &&
+          'foo' in value &&
+          typeof value.foo === 'boolean'
+        ) {
+          return { value: value as { foo: boolean } }
+        }
+
+        return {
+          issues: [
+            {
+              message: 'Expected boolean',
+              path: ['foo'],
+            },
+          ],
+        }
+      },
+    },
+  })
+
+  return schema
+}
 
 describe('convertSchemaToJsonSchema', () => {
   it('should return undefined for undefined schema', () => {
@@ -37,6 +96,19 @@ describe('convertSchemaToJsonSchema', () => {
 
     expect(result).toBeDefined()
     expect(result?.type).toBe('boolean')
+  })
+
+  it('should convert callable Standard JSON Schema schemas', () => {
+    const schema = createCallableStandardSchema()
+    const result = convertSchemaToJsonSchema(schema)
+
+    expect(result).toBeDefined()
+    expect(typeof result).toBe('object')
+    expect(result).not.toBe(schema)
+    expect('$schema' in (result || {})).toBe(false)
+    expect(result?.type).toBe('object')
+    expect(result?.properties?.foo?.type).toBe('boolean')
+    expect(result?.required).toContain('foo')
   })
 
   it('should convert an object schema with properties', () => {
@@ -563,6 +635,11 @@ describe('isStandardJSONSchema', () => {
     expect(isStandardJSONSchema(schema)).toBe(true)
   })
 
+  it('should return true for callable Standard JSON Schema implementors', () => {
+    const schema = createCallableStandardSchema()
+    expect(isStandardJSONSchema(schema)).toBe(true)
+  })
+
   it('should return false for plain objects', () => {
     const plainObject = { type: 'object', properties: {} }
     expect(isStandardJSONSchema(plainObject)).toBe(false)
@@ -586,6 +663,11 @@ describe('isStandardJSONSchema', () => {
 describe('isStandardSchema', () => {
   it('should return true for Zod v4 schemas (which implement StandardSchemaV1)', () => {
     const schema = z.object({ name: z.string() })
+    expect(isStandardSchema(schema)).toBe(true)
+  })
+
+  it('should return true for callable Standard Schema implementors', () => {
+    const schema = createCallableStandardSchema()
     expect(isStandardSchema(schema)).toBe(true)
   })
 
@@ -618,6 +700,15 @@ describe('parseWithStandardSchema', () => {
     expect(result).toEqual({ name: 'John', age: 30 })
   })
 
+  it('should parse valid data with callable Standard Schema implementors', () => {
+    const schema = createCallableStandardSchema()
+    const result = parseWithStandardSchema<{ foo: boolean }>(schema, {
+      foo: true,
+    })
+
+    expect(result).toEqual({ foo: true })
+  })
+
   it('should throw for invalid data with Zod schema', () => {
     const schema = z.object({
       name: z.string(),
@@ -627,6 +718,14 @@ describe('parseWithStandardSchema', () => {
     expect(() =>
       parseWithStandardSchema(schema, { name: 'John', age: 'not a number' }),
     ).toThrow()
+  })
+
+  it('should throw for invalid data with callable Standard Schema implementors', () => {
+    const schema = createCallableStandardSchema()
+
+    expect(() => parseWithStandardSchema(schema, { foo: 'nope' })).toThrow(
+      'Expected boolean',
+    )
   })
 
   it('should pass through data unchanged for non-StandardSchema inputs', () => {
@@ -656,6 +755,18 @@ describe('validateWithStandardSchema', () => {
     }
   })
 
+  it('should return success for valid data with callable Standard Schema implementors', async () => {
+    const schema = createCallableStandardSchema()
+    const result = await validateWithStandardSchema<{ foo: boolean }>(schema, {
+      foo: true,
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toEqual({ foo: true })
+    }
+  })
+
   it('should return failure with issues for invalid data with Zod schema', async () => {
     const schema = z.object({
       name: z.string(),
@@ -671,6 +782,23 @@ describe('validateWithStandardSchema', () => {
     if (!result.success) {
       expect(result.issues).toBeDefined()
       expect(result.issues.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('should return failure with issues for invalid callable Standard Schema data', async () => {
+    const schema = createCallableStandardSchema()
+    const result = await validateWithStandardSchema<{ foo: boolean }>(schema, {
+      foo: 'nope',
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.issues).toEqual([
+        {
+          message: 'Expected boolean',
+          path: ['foo'],
+        },
+      ])
     }
   })
 
