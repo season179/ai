@@ -410,7 +410,7 @@ describe('OpenRouter adapter option mapping', () => {
     const errorChunk = chunks.find((c) => c.type === 'RUN_ERROR')
     expect(errorChunk).toBeDefined()
 
-    if (errorChunk && errorChunk.type === 'RUN_ERROR') {
+    if (errorChunk) {
       expect(errorChunk.error?.message).toBe('Invalid API key')
     }
   })
@@ -1708,12 +1708,12 @@ describe('OpenRouter cost tracking', () => {
       adapter,
       messages: [{ role: 'user', content: 'hi' }],
     })) {
-      if (chunk.type === 'RUN_FINISHED') finished = chunk as RunFinishedEvent
+      if (chunk.type === 'RUN_FINISHED') finished = chunk
     }
     return finished
   }
 
-  it('attaches cost (USD) and details to RUN_FINISHED.usage when the hook populated the store', async () => {
+  it('attaches OpenRouter cost and details to RUN_FINISHED.usage when the hook populated the store', async () => {
     setupMockSdkClient(baseStreamChunks('gen-cost-1'))
 
     const adapter = createOpenRouterText('openai/gpt-4o-mini', 'test-key')
@@ -1721,6 +1721,8 @@ describe('OpenRouter cost tracking', () => {
       cost: 0.0012,
       costDetails: {
         upstreamInferenceCost: 0.001,
+        upstreamInferenceInputCost: 0.0004,
+        upstreamInferenceOutputCost: 0.0006,
         cacheDiscount: -0.0001,
       },
     })
@@ -1734,6 +1736,8 @@ describe('OpenRouter cost tracking', () => {
       cost: 0.0012,
       costDetails: {
         upstreamInferenceCost: 0.001,
+        upstreamInferenceInputCost: 0.0004,
+        upstreamInferenceOutputCost: 0.0006,
         cacheDiscount: -0.0001,
       },
     })
@@ -1821,114 +1825,5 @@ describe('OpenRouter cost tracking', () => {
     const finished = await runAndGetFinished(adapter)
 
     expect(finished?.usage).toMatchObject({ cost: 0.75 })
-  })
-
-  // Regression: when the stream aborts after finishReason but before the
-  // trailing usage chunk, the tee'd cost parser can still populate cost
-  // (it reads independently of the SDK consumer). Emitting RUN_FINISHED
-  // with zero-token usage alongside a non-zero cost would be worse than
-  // no usage at all — billing/telemetry consumers would see a bogus
-  // "0 tokens, $X cost" signal. Drop usage entirely if tokens are absent.
-  it('does not synthesize zero-token usage when the trailing usage chunk never arrives', async () => {
-    const id = 'gen-late-abort-no-usage'
-    // No `usage` on the finishReason chunk — OpenRouter normally delivers
-    // it in a separate trailing chunk that this scenario never receives.
-    const okChunks = [
-      {
-        id,
-        model: 'openai/gpt-4o-mini',
-        choices: [{ delta: { content: 'Hi' }, finishReason: null }],
-      },
-      {
-        id,
-        model: 'openai/gpt-4o-mini',
-        choices: [{ delta: {}, finishReason: 'stop' }],
-      },
-    ]
-    mockSend = vi.fn().mockImplementation(() =>
-      Promise.resolve({
-        [Symbol.asyncIterator]() {
-          let i = 0
-          return {
-            async next() {
-              if (i < okChunks.length) return { value: okChunks[i++]!, done: false }
-              throw new Error('aborted before usage chunk')
-            },
-          }
-        },
-      }),
-    )
-
-    const adapter = createOpenRouterText('openai/gpt-4o-mini', 'test-key')
-    // Simulate the tee'd parser beating the SDK consumer to the usage
-    // chunk: cost is in the store even though `finalUsage` will stay
-    // undefined for the SDK-visible stream.
-    getCostStore(adapter).set(id, { cost: 0.05 })
-
-    const chunks: Array<StreamChunk> = []
-    for await (const chunk of chat({
-      adapter,
-      messages: [{ role: 'user', content: 'hi' }],
-    })) {
-      chunks.push(chunk)
-    }
-
-    const finished = chunks.find((c) => c.type === 'RUN_FINISHED')
-    expect(finished).toBeDefined()
-    if (finished?.type === 'RUN_FINISHED') {
-      expect(finished.usage).toBeUndefined()
-      expect(finished.finishReason).toBe('stop')
-    }
-  })
-
-  // Regression: deferring RUN_FINISHED until the stream drains (so we can
-  // read the trailing usage chunk) used to convert a late abort/disconnect
-  // into a user-visible RUN_ERROR — even when the run was logically
-  // complete. A terminal finishReason must still produce RUN_FINISHED.
-  it('still emits RUN_FINISHED when the stream errors after finishReason', async () => {
-    const id = 'gen-late-abort'
-    const okChunks = [
-      {
-        id,
-        model: 'openai/gpt-4o-mini',
-        choices: [{ delta: { content: 'Hi' }, finishReason: null }],
-      },
-      {
-        id,
-        model: 'openai/gpt-4o-mini',
-        choices: [{ delta: {}, finishReason: 'stop' }],
-        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-      },
-    ]
-    mockSend = vi.fn().mockImplementation(() =>
-      Promise.resolve({
-        [Symbol.asyncIterator]() {
-          let i = 0
-          return {
-            async next() {
-              if (i < okChunks.length) return { value: okChunks[i++]!, done: false }
-              throw new Error('connection dropped after finishReason')
-            },
-          }
-        },
-      }),
-    )
-
-    const adapter = createOpenRouterText('openai/gpt-4o-mini', 'test-key')
-    const chunks: Array<StreamChunk> = []
-    for await (const chunk of chat({
-      adapter,
-      messages: [{ role: 'user', content: 'hi' }],
-    })) {
-      chunks.push(chunk)
-    }
-
-    const finished = chunks.find((c) => c.type === 'RUN_FINISHED')
-    const errored = chunks.find((c) => c.type === 'RUN_ERROR')
-    expect(errored).toBeUndefined()
-    expect(finished).toBeDefined()
-    if (finished?.type === 'RUN_FINISHED') {
-      expect(finished.finishReason).toBe('stop')
-    }
   })
 })

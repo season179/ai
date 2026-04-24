@@ -117,9 +117,9 @@ OPENROUTER_API_KEY=sk-or-...
 
 ## Cost Tracking
 
-The OpenRouter adapter attaches the authoritative per-request cost to the `RUN_FINISHED` event under `usage.cost` (USD). OpenRouter [reports cost inline in every chat response](https://openrouter.ai/docs/use-cases/usage-accounting), so cost arrives in the same SSE stream as the model output — there is **no extra HTTP request** and **no added latency**.
+The OpenRouter adapter attaches the authoritative per-request cost to the `RUN_FINISHED` event under `usage.cost`. OpenRouter [reports cost inline in every chat response](https://openrouter.ai/docs/use-cases/usage-accounting), in credits, so cost arrives in the same SSE stream as the model output — there is **no extra HTTP request** and **no added latency**.
 
-Why we don't compute cost locally from tokens × price: OpenRouter routes the same model id to different upstream providers (primary, fallback, BYOK), each with different pricing, plus applies cache discounts and BYOK upstream costs. A static price table would silently drift and produce wrong numbers.
+Why we don't compute cost locally from tokens × price: OpenRouter routes the same model id to different upstream providers (primary, fallback, BYOK), each with different pricing, and may include cached-token pricing or BYOK upstream costs. A static price table would silently drift and produce wrong numbers.
 
 ```typescript
 import { chat } from "@tanstack/ai";
@@ -132,9 +132,8 @@ const stream = chat({
 
 for await (const chunk of stream) {
   if (chunk.type === "RUN_FINISHED") {
-    console.log("USD cost:", chunk.usage?.cost);
+    console.log("OpenRouter cost:", chunk.usage?.cost);
     console.log("Upstream inference cost:", chunk.usage?.costDetails?.upstreamInferenceCost);
-    console.log("Cache discount:", chunk.usage?.costDetails?.cacheDiscount);
   }
 }
 ```
@@ -203,4 +202,3 @@ const stream = chat({
 ```
 
 **Supported models:** all OpenRouter chat models. See [Provider Tools](../tools/provider-tools.md#which-models-support-which-tools).
-

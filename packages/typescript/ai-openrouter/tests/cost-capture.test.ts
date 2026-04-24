@@ -22,14 +22,19 @@ function makeJsonResponse(payload: unknown): Response {
   })
 }
 
-const fakeFetcher = (response: Response): Fetcher => async () => response
+const fakeFetcher =
+  (response: Response): Fetcher =>
+  () =>
+    Promise.resolve(response)
 
-async function readAll(stream: ReadableStream<Uint8Array> | null): Promise<string> {
+async function readAll(
+  stream: ReadableStream<Uint8Array> | null,
+): Promise<string> {
   if (!stream) return ''
   const reader = stream.getReader()
   const decoder = new TextDecoder()
   let out = ''
-  while (true) {
+  for (;;) {
     const { value, done } = await reader.read()
     if (value) out += decoder.decode(value, { stream: true })
     if (done) break
@@ -66,6 +71,8 @@ describe('createCostCaptureHook — SSE chat-completion responses', () => {
           cost: 0.001234,
           cost_details: {
             upstream_inference_cost: 0.001,
+            upstream_inference_input_cost: 0.0004,
+            upstream_inference_output_cost: 0.0006,
             cache_discount: -0.0001,
           },
         },
@@ -80,23 +87,24 @@ describe('createCostCaptureHook — SSE chat-completion responses', () => {
       cost: 0.001234,
       costDetails: {
         upstreamInferenceCost: 0.001,
+        upstreamInferenceInputCost: 0.0004,
+        upstreamInferenceOutputCost: 0.0006,
         cacheDiscount: -0.0001,
       },
     })
   })
 
   it('handles cost without cost_details', async () => {
-    const body =
-      `data: ${JSON.stringify({
-        id: 'gen-2',
-        choices: [],
-        usage: {
-          prompt_tokens: 1,
-          completion_tokens: 1,
-          total_tokens: 2,
-          cost: 0.5,
-        },
-      })}\n\ndata: [DONE]\n\n`
+    const body = `data: ${JSON.stringify({
+      id: 'gen-2',
+      choices: [],
+      usage: {
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        total_tokens: 2,
+        cost: 0.5,
+      },
+    })}\n\ndata: [DONE]\n\n`
 
     const { client, store } = buildClient(makeSseResponse(body))
     const res = await client.request(makeChatRequest())
@@ -126,8 +134,7 @@ describe('createCostCaptureHook — SSE chat-completion responses', () => {
     'stores nothing when the response has no cost field (%s)',
     async (_label, usage) => {
       const id = 'gen-nocost'
-      const body =
-        `data: ${JSON.stringify({ id, choices: [], usage })}\n\ndata: [DONE]\n\n`
+      const body = `data: ${JSON.stringify({ id, choices: [], usage })}\n\ndata: [DONE]\n\n`
 
       const { client, store } = buildClient(makeSseResponse(body))
       const res = await client.request(makeChatRequest())
@@ -186,17 +193,16 @@ describe('createCostCaptureHook — passes through unrelated requests', () => {
     // Pathname-only matching: a query param that happens to contain the
     // chat-completions path must not activate the hook on an unrelated
     // endpoint.
-    const body =
-      `data: ${JSON.stringify({
-        id: 'spoof-1',
-        choices: [],
-        usage: {
-          prompt_tokens: 1,
-          completion_tokens: 1,
-          total_tokens: 2,
-          cost: 0.42,
-        },
-      })}\n\ndata: [DONE]\n\n`
+    const body = `data: ${JSON.stringify({
+      id: 'spoof-1',
+      choices: [],
+      usage: {
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        total_tokens: 2,
+        cost: 0.42,
+      },
+    })}\n\ndata: [DONE]\n\n`
 
     const { client, store } = buildClient(makeSseResponse(body))
     const res = await client.request(
@@ -217,7 +223,12 @@ describe('createCostCaptureHook — robustness', () => {
       `data: ${JSON.stringify({
         id: 'gen-mix',
         choices: [],
-        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost: 0.1 },
+        usage: {
+          prompt_tokens: 1,
+          completion_tokens: 1,
+          total_tokens: 2,
+          cost: 0.1,
+        },
       })}\n\ndata: [DONE]\n\n`
 
     const { client, store } = buildClient(makeSseResponse(body))
@@ -236,17 +247,16 @@ describe('createCostCaptureHook — robustness', () => {
   // Regression: proxies and some runtimes emit spec-compliant CRLF-framed
   // SSE (`\r\n\r\n`). Splitting only on `\n\n` used to silently drop cost.
   it('parses SSE with CRLF-delimited frames', async () => {
-    const body =
-      `data: ${JSON.stringify({
-        id: 'gen-crlf',
-        choices: [],
-        usage: {
-          prompt_tokens: 1,
-          completion_tokens: 1,
-          total_tokens: 2,
-          cost: 0.3,
-        },
-      })}\r\n\r\ndata: [DONE]\r\n\r\n`
+    const body = `data: ${JSON.stringify({
+      id: 'gen-crlf',
+      choices: [],
+      usage: {
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        total_tokens: 2,
+        cost: 0.3,
+      },
+    })}\r\n\r\ndata: [DONE]\r\n\r\n`
 
     const { client, store } = buildClient(makeSseResponse(body))
     const res = await client.request(makeChatRequest())
@@ -282,7 +292,12 @@ describe('attachCostCapture', () => {
   const costBody = `data: ${JSON.stringify({
     id: 'gen-attach',
     choices: [],
-    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost: 0.25 },
+    usage: {
+      prompt_tokens: 1,
+      completion_tokens: 1,
+      total_tokens: 2,
+      cost: 0.25,
+    },
   })}\n\ndata: [DONE]\n\n`
 
   it('returns a fresh HTTPClient when no caller client is supplied', () => {
@@ -451,17 +466,16 @@ describe('CostStore', () => {
 
 describe('createCostCaptureHook — resilience to preceding hooks', () => {
   it('does not fail the request when a preceding hook consumed the body', async () => {
-    const body =
-      `data: ${JSON.stringify({
-        id: 'gen-disturbed',
-        choices: [],
-        usage: {
-          prompt_tokens: 1,
-          completion_tokens: 1,
-          total_tokens: 2,
-          cost: 0.9,
-        },
-      })}\n\ndata: [DONE]\n\n`
+    const body = `data: ${JSON.stringify({
+      id: 'gen-disturbed',
+      choices: [],
+      usage: {
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        total_tokens: 2,
+        cost: 0.9,
+      },
+    })}\n\ndata: [DONE]\n\n`
 
     const client = new HTTPClient({
       fetcher: fakeFetcher(makeSseResponse(body)),

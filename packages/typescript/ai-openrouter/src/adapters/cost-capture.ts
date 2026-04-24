@@ -1,11 +1,8 @@
 import { HTTPClient } from '@openrouter/sdk'
 
 export interface CostInfo {
-  cost?: number
-  costDetails?: {
-    upstreamInferenceCost?: number | null
-    cacheDiscount?: number | null
-  }
+  cost: number
+  costDetails?: Record<string, number | null | undefined>
 }
 
 interface CostEntry {
@@ -310,42 +307,43 @@ function extractDataPayload(event: string): string | undefined {
 function safeParseJson(text: string): Record<string, unknown> | undefined {
   try {
     const v = JSON.parse(text)
-    return v && typeof v === 'object' ? (v as Record<string, unknown>) : undefined
+    return v && typeof v === 'object'
+      ? (v as Record<string, unknown>)
+      : undefined
   } catch {
     return undefined
   }
 }
 
-function pickNumberOrNull(
-  obj: Record<string, unknown> | undefined,
-  key: string,
-): number | null | undefined {
-  if (!obj) return undefined
-  const v = obj[key]
-  if (typeof v === 'number') return v
-  if (v === null) return null
-  return undefined
+function toCamelCase(key: string): string {
+  return key.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase())
+}
+
+function extractCostDetails(
+  details: Record<string, unknown> | undefined,
+): CostInfo['costDetails'] | undefined {
+  if (!details) return undefined
+  const result: NonNullable<CostInfo['costDetails']> = {}
+  for (const [key, value] of Object.entries(details)) {
+    if (typeof value === 'number' || value === null) {
+      result[toCamelCase(key)] = value
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 function extractCostFromUsage(
   usage: Record<string, unknown>,
 ): CostInfo | undefined {
-  // `cost` is the authoritative per-request USD total. Emitting `costDetails`
-  // without it would surface a breakdown that can't be reconciled against a
-  // total — callers could misread it as the bill.
+  // `cost` is the authoritative per-request total reported by OpenRouter.
+  // Emitting `costDetails` without it would surface a breakdown that can't be
+  // reconciled against a total — callers could misread it as the bill.
   const cost = typeof usage.cost === 'number' ? usage.cost : undefined
   if (cost === undefined) return undefined
   const details = usage.cost_details as Record<string, unknown> | undefined
-  const upstream = pickNumberOrNull(details, 'upstream_inference_cost')
-  const cacheDiscount = pickNumberOrNull(details, 'cache_discount')
-  const hasDetails = upstream !== undefined || cacheDiscount !== undefined
+  const costDetails = extractCostDetails(details)
   return {
     cost,
-    ...(hasDetails && {
-      costDetails: {
-        ...(upstream !== undefined && { upstreamInferenceCost: upstream }),
-        ...(cacheDiscount !== undefined && { cacheDiscount }),
-      },
-    }),
+    ...(costDetails && { costDetails }),
   }
 }

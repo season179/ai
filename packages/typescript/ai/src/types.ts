@@ -821,26 +821,19 @@ export interface UsageTotals {
   completionTokens: number
   totalTokens: number
   /**
-   * USD cost. Optional because most providers don't report cost per
-   * request — the canonical source is the user's billing dashboard, not
-   * the response. Adapters MUST forward only what the provider returned;
-   * they MUST NOT multiply tokens × price tables, since stale or wrong
-   * pricing data would silently corrupt accounting.
+   * Provider-reported cost amount. Optional because most providers don't
+   * report cost per request. Adapters MUST forward only what the provider
+   * returned; they MUST NOT multiply tokens × price tables, since stale or
+   * wrong pricing data would silently corrupt accounting.
    */
   cost?: number
   /**
    * Provider-reported cost breakdown. Loosely typed because providers
    * disagree on what to expose (BYOK upstream costs, cache discounts,
-   * per-tier rates, ...) and locking the shape down would force every
-   * new adapter to either lie or back-fill. The named fields are
-   * whatever OpenRouter currently reports; other adapters may report
-   * numeric fields under their own keys via the index signature.
+   * per-tier rates, ...) and adapters should preserve only the numeric
+   * provider fields they received, using the provider's native units.
    */
-  costDetails?: {
-    upstreamInferenceCost?: number | null
-    cacheDiscount?: number | null
-    [key: string]: number | null | undefined
-  }
+  costDetails?: Record<string, number | null | undefined>
 }
 
 /**
