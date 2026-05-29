@@ -321,7 +321,10 @@ function openRouterCostMount(): Mountable {
     ): Promise<boolean> {
       // The mount prefix (/openrouter-cost) is stripped before dispatch; the
       // SDK posts to <serverURL>/chat/completions where serverURL ends in /v1.
-      if (req.method !== 'POST' || !pathname.startsWith('/v1/chat/completions')) {
+      if (
+        req.method !== 'POST' ||
+        !pathname.startsWith('/v1/chat/completions')
+      ) {
         return false
       }
       await drainBody(req)
@@ -337,7 +340,11 @@ function openRouterCostMount(): Mountable {
         {
           ...base,
           choices: [
-            { index: 0, delta: { role: 'assistant', content: 'Hi' }, finish_reason: null },
+            {
+              index: 0,
+              delta: { role: 'assistant', content: 'Hi' },
+              finish_reason: null,
+            },
           ],
         },
         {

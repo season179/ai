@@ -23,15 +23,15 @@ describe('usage cost type surface', () => {
   })
 
   it('UsageCostBreakdown enumerates the canonical breakdown fields', () => {
-    expectTypeOf<
-      UsageCostBreakdown['upstreamCost']
-    >().toEqualTypeOf<number | undefined>()
-    expectTypeOf<
-      UsageCostBreakdown['upstreamInputCost']
-    >().toEqualTypeOf<number | undefined>()
-    expectTypeOf<
-      UsageCostBreakdown['upstreamOutputCost']
-    >().toEqualTypeOf<number | undefined>()
+    expectTypeOf<UsageCostBreakdown['upstreamCost']>().toEqualTypeOf<
+      number | undefined
+    >()
+    expectTypeOf<UsageCostBreakdown['upstreamInputCost']>().toEqualTypeOf<
+      number | undefined
+    >()
+    expectTypeOf<UsageCostBreakdown['upstreamOutputCost']>().toEqualTypeOf<
+      number | undefined
+    >()
   })
 
   it('RunFinishedEvent.usage carries cost/costDetails', () => {
@@ -51,9 +51,9 @@ describe('usage cost type surface', () => {
   })
 
   it('FinishInfo.usage (onFinish) carries cost/costDetails', () => {
-    expectTypeOf<
-      NonNullable<FinishInfo['usage']>['cost']
-    >().toEqualTypeOf<number | undefined>()
+    expectTypeOf<NonNullable<FinishInfo['usage']>['cost']>().toEqualTypeOf<
+      number | undefined
+    >()
     expectTypeOf<
       NonNullable<FinishInfo['usage']>['costDetails']
     >().toEqualTypeOf<UsageCostBreakdown | undefined>()
