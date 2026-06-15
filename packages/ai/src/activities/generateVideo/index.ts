@@ -10,8 +10,14 @@
 import { aiEventClient } from '@tanstack/ai-event-client'
 import { toRunErrorPayload } from '../error-payload'
 import { resolveDebugOption } from '../../logger/resolve'
+import {
+  notifyObserverError,
+  notifyObserverFinish,
+  notifyObserverStart,
+} from '../../observability/notify'
 import type { InternalLogger } from '../../logger/internal-logger'
 import type { DebugOption } from '../../logger/types'
+import type { ActivityObserver } from '../../observability/types'
 import type { VideoAdapter } from './adapter'
 import type {
   StreamChunk,
@@ -111,6 +117,14 @@ export type VideoCreateOptions<
    * control and/or a custom `Logger`.
    */
   debug?: DebugOption
+  /**
+   * Observability hooks notified on start, success, and error. Pass
+   * `otelObserver()` to emit OpenTelemetry spans, or implement the
+   * `ActivityObserver` contract for a custom backend. In streaming mode the
+   * span covers the full create→poll→complete lifecycle; in non-streaming mode
+   * it covers job submission.
+   */
+  observers?: Array<ActivityObserver>
 } & ({} extends VideoProviderOptions<TAdapter>
     ? {
         /** Provider-specific options for video generation */ modelOptions?: VideoProviderOptions<TAdapter>
@@ -250,13 +264,27 @@ export function generateVideo<
 async function runCreateVideoJob<
   TAdapter extends VideoAdapter<string, any, any, any>,
 >(options: VideoCreateOptions<TAdapter, boolean>): Promise<VideoJobResult> {
-  const { adapter, prompt, size, duration, modelOptions } = options
+  const { adapter, prompt, size, duration, modelOptions, observers } = options
   const model = adapter.model
+  const requestId = createId('video')
+  const startTime = Date.now()
   const logger: InternalLogger = resolveDebugOption(options.debug)
   const providerName =
     (adapter as { name?: string; provider?: string }).provider ??
     (adapter as { name?: string }).name ??
     'unknown'
+
+  await notifyObserverStart(
+    observers,
+    {
+      activity: 'video',
+      requestId,
+      provider: adapter.name,
+      model,
+      modelOptions,
+    },
+    logger,
+  )
 
   logger.request(`activity=generateVideo provider=${providerName}`, {
     provider: providerName,
@@ -276,8 +304,33 @@ async function runCreateVideoJob<
       jobId: result.jobId,
       model: result.model,
     })
+    // Non-streaming create only submits the job; usage isn't known until the
+    // job completes via polling, so the span covers submission only.
+    await notifyObserverFinish(
+      observers,
+      {
+        activity: 'video',
+        requestId,
+        provider: adapter.name,
+        model,
+        durationMs: Date.now() - startTime,
+      },
+      logger,
+    )
     return result
   } catch (error) {
+    await notifyObserverError(
+      observers,
+      {
+        activity: 'video',
+        requestId,
+        provider: adapter.name,
+        model,
+        durationMs: Date.now() - startTime,
+        error,
+      },
+      logger,
+    )
     logger.errors('generateVideo activity failed', {
       error,
       source: 'generateVideo',
@@ -297,9 +350,11 @@ function sleep(ms: number): Promise<void> {
 async function* runStreamingVideoGeneration<
   TAdapter extends VideoAdapter<string, any, any, any>,
 >(options: VideoCreateOptions<TAdapter, true>): AsyncIterable<StreamChunk> {
-  const { adapter, prompt, size, duration, modelOptions } = options
+  const { adapter, prompt, size, duration, modelOptions, observers } = options
   const model = adapter.model
   const runId = options.runId ?? createId('run')
+  const requestId = createId('video')
+  const obsStartTime = Date.now()
   const pollingInterval = options.pollingInterval ?? 2000
   const maxDuration = options.maxDuration ?? 600_000
   const logger: InternalLogger = resolveDebugOption(options.debug)
@@ -317,6 +372,18 @@ async function* runStreamingVideoGeneration<
     timestamp: Date.now(),
   } as StreamChunk
 
+  await notifyObserverStart(
+    observers,
+    {
+      activity: 'video',
+      requestId,
+      provider: adapter.name,
+      model,
+      modelOptions,
+    },
+    logger,
+  )
+
   logger.request(
     `activity=generateVideo provider=${providerName} stream=true`,
     {
@@ -325,6 +392,9 @@ async function* runStreamingVideoGeneration<
     },
   )
 
+  // Tracks whether a terminal observer event (finish/error) has already fired,
+  // so the `finally` below can fire one on abandonment without double-firing.
+  let settled = false
   try {
     // Create the video generation job
     const jobResult = await adapter.createVideoJob({
@@ -386,6 +456,20 @@ async function* runStreamingVideoGeneration<
           timestamp: Date.now(),
         } as StreamChunk
 
+        await notifyObserverFinish(
+          observers,
+          {
+            activity: 'video',
+            requestId,
+            provider: adapter.name,
+            model,
+            durationMs: Date.now() - obsStartTime,
+            usage: urlResult.usage,
+          },
+          logger,
+        )
+        settled = true
+
         yield {
           type: 'RUN_FINISHED',
           runId,
@@ -404,6 +488,19 @@ async function* runStreamingVideoGeneration<
     throw new Error('Video generation timed out')
   } catch (error: unknown) {
     const payload = toRunErrorPayload(error, 'Video generation failed')
+    await notifyObserverError(
+      observers,
+      {
+        activity: 'video',
+        requestId,
+        provider: adapter.name,
+        model,
+        durationMs: Date.now() - obsStartTime,
+        error,
+      },
+      logger,
+    )
+    settled = true
     logger.errors('generateVideo activity failed', {
       message: payload.message,
       code: payload.code,
@@ -418,6 +515,28 @@ async function* runStreamingVideoGeneration<
       error: payload,
       timestamp: Date.now(),
     } as StreamChunk
+  } finally {
+    if (!settled) {
+      // The consumer abandoned the stream (broke the `for await` loop or
+      // disconnected) before completion, so the generator is being unwound at
+      // a `yield` without reaching finish/error. Fire a terminal cancellation
+      // event so otelObserver ends its span instead of leaking it.
+      await notifyObserverError(
+        observers,
+        {
+          activity: 'video',
+          requestId,
+          provider: adapter.name,
+          model,
+          durationMs: Date.now() - obsStartTime,
+          error: {
+            name: 'cancelled',
+            message: 'Video generation stream abandoned before completion',
+          },
+        },
+        logger,
+      )
+    }
   }
 }
 

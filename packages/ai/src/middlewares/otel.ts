@@ -8,6 +8,9 @@ import {
   MAX_TOKENS_KEYS,
   NESTED_MAX_TOKENS_KEY,
 } from '../utilities/sampling-keys'
+import { firstNumber } from '../utilities/numbers'
+import { errorMessage, errorTypeName } from '../utilities/errors'
+import { usageAttributes } from '../observability/usage-attributes'
 import type {
   AttributeValue,
   Exception,
@@ -20,7 +23,6 @@ import type {
   ChatMiddleware,
   ChatMiddlewareContext,
 } from '../activities/chat/middleware/types'
-import type { TokenUsage } from '../types'
 
 /**
  * Scope (role) of an OTel span emitted by this middleware.
@@ -165,91 +167,6 @@ function messageEventName(role: string): string {
     default:
       return `gen_ai.${role}.message`
   }
-}
-
-/**
- * Return the first candidate that is a finite `number`, or `undefined`. Used to
- * pick a sampling attribute from among the several provider-native spellings.
- */
-function firstNumber(...candidates: Array<unknown>): number | undefined {
-  for (const candidate of candidates) {
-    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-      return candidate
-    }
-  }
-  return undefined
-}
-
-/**
- * Build the full set of `gen_ai.usage.*` span attributes from a `TokenUsage`.
- *
- * Beyond input/output tokens, this emits provider-reported cost, total tokens,
- * cache and reasoning breakdowns, and duration-based billing — every field is
- * guarded so spans stay clean when a provider doesn't report it. Cache and
- * reasoning use the official GenAI semconv names; `gen_ai.usage.cost` and
- * `gen_ai.usage.total_tokens` are de-facto extensions consumed by backends
- * like PostHog (which otherwise re-derive cost from their own price tables,
- * losing cache discounts and gateway markup). Fields with no semconv or
- * de-facto convention (`costDetails`, `durationSeconds`) are
- * TanStack-namespaced. Deliberately not emitted: `unitsBilled`,
- * `providerUsageDetails`, and the per-modality token breakdowns — those are
- * media-oriented; media-activity observability is tracked in #720.
- */
-function usageAttributes(usage: TokenUsage): Record<string, AttributeValue> {
-  const attrs: Record<string, AttributeValue> = {
-    'gen_ai.usage.input_tokens': usage.promptTokens,
-    'gen_ai.usage.output_tokens': usage.completionTokens,
-  }
-  const optional: Array<[key: string, value: unknown]> = [
-    ['gen_ai.usage.total_tokens', usage.totalTokens],
-    ['gen_ai.usage.cost', usage.cost],
-    [
-      'gen_ai.usage.cache_read.input_tokens',
-      usage.promptTokensDetails?.cachedTokens,
-    ],
-    [
-      'gen_ai.usage.cache_creation.input_tokens',
-      usage.promptTokensDetails?.cacheWriteTokens,
-    ],
-    [
-      'gen_ai.usage.reasoning.output_tokens',
-      usage.completionTokensDetails?.reasoningTokens,
-    ],
-    ['tanstack.ai.usage.duration_seconds', usage.durationSeconds],
-    ['tanstack.ai.usage.upstream_cost', usage.costDetails?.upstreamCost],
-    [
-      'tanstack.ai.usage.upstream_input_cost',
-      usage.costDetails?.upstreamInputCost,
-    ],
-    [
-      'tanstack.ai.usage.upstream_output_cost',
-      usage.costDetails?.upstreamOutputCost,
-    ],
-  ]
-  for (const [key, value] of optional) {
-    const num = firstNumber(value)
-    if (num !== undefined) attrs[key] = num
-  }
-  return attrs
-}
-
-function errorMessage(err: unknown): string | undefined {
-  if (err instanceof Error) return err.message
-  if (typeof err === 'string') return err
-  if (err && typeof err === 'object' && 'message' in err) {
-    const m = (err as { message?: unknown }).message
-    if (typeof m === 'string') return m
-  }
-  return undefined
-}
-
-function errorTypeName(err: unknown): string {
-  if (err instanceof Error) return err.name || 'Error'
-  if (err && typeof err === 'object' && 'name' in err) {
-    const n = (err as { name?: unknown }).name
-    if (typeof n === 'string') return n
-  }
-  return 'Error'
 }
 
 function safeCall<T>(label: string, fn: () => T): T | undefined {

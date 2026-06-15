@@ -8,8 +8,14 @@
 import { aiEventClient } from '@tanstack/ai-event-client'
 import { streamGenerationResult } from '../stream-generation-result.js'
 import { resolveDebugOption } from '../../logger/resolve'
+import {
+  notifyObserverError,
+  notifyObserverFinish,
+  notifyObserverStart,
+} from '../../observability/notify'
 import type { InternalLogger } from '../../logger/internal-logger'
 import type { DebugOption } from '../../logger/types'
+import type { ActivityObserver } from '../../observability/types'
 import type { TTSAdapter } from './adapter'
 import type { StreamChunk, TTSResult } from '../../types'
 
@@ -73,6 +79,12 @@ export interface TTSActivityOptions<
    * control and/or a custom `Logger`.
    */
   debug?: DebugOption
+  /**
+   * Observability hooks notified on start, success, and error. Pass
+   * `otelObserver()` to emit OpenTelemetry spans, or implement the
+   * `ActivityObserver` contract for a custom backend.
+   */
+  observers?: Array<ActivityObserver>
 }
 
 // ===========================
@@ -143,7 +155,7 @@ export function generateSpeech<
 async function runGenerateSpeech<
   TAdapter extends TTSAdapter<string, TTSProviderOptions<TAdapter>>,
 >(options: TTSActivityOptions<TAdapter, boolean>): Promise<TTSResult> {
-  const { adapter, stream: _stream, debug: _debug, ...rest } = options
+  const { adapter, stream: _stream, debug: _debug, observers, ...rest } = options
   const model = adapter.model
   const requestId = createId('speech')
   const startTime = Date.now()
@@ -152,6 +164,18 @@ async function runGenerateSpeech<
     (adapter as { name?: string; provider?: string }).provider ??
     (adapter as { name?: string }).name ??
     'unknown'
+
+  await notifyObserverStart(
+    observers,
+    {
+      activity: 'speech',
+      requestId,
+      provider: adapter.name,
+      model,
+      modelOptions: rest.modelOptions,
+    },
+    logger,
+  )
 
   aiEventClient.emit('speech:request:started', {
     requestId,
@@ -202,6 +226,19 @@ async function runGenerateSpeech<
       contentType: result.contentType,
     })
 
+    await notifyObserverFinish(
+      observers,
+      {
+        activity: 'speech',
+        requestId,
+        provider: adapter.name,
+        model,
+        durationMs: duration,
+        usage: result.usage,
+      },
+      logger,
+    )
+
     return result
   } catch (error) {
     const duration = Date.now() - startTime
@@ -215,6 +252,18 @@ async function runGenerateSpeech<
       modelOptions: rest.modelOptions as Record<string, unknown> | undefined,
       timestamp: Date.now(),
     })
+    await notifyObserverError(
+      observers,
+      {
+        activity: 'speech',
+        requestId,
+        provider: adapter.name,
+        model,
+        durationMs: duration,
+        error,
+      },
+      logger,
+    )
     logger.errors('generateSpeech activity failed', {
       error,
       source: 'generateSpeech',

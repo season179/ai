@@ -175,6 +175,42 @@ otelMiddleware({
 })
 ```
 
+## Beyond chat: media activities
+
+`otelMiddleware` covers `chat()`. The media activities — `generateImage`, `generateVideo`, `generateAudio`, `generateSpeech`, and `generateTranscription` — are single request → response (or submit → poll for video), so instead of the chat middleware pipeline they take a lighter **observer**. Pass `otelObserver()` (from the `@tanstack/ai/observability` subpath) on the activity's `observers` option to emit one span per call:
+
+```ts
+import { generateImage } from '@tanstack/ai'
+import { otelObserver } from '@tanstack/ai/observability'
+import { openaiImage } from '@tanstack/ai-openai'
+import { trace, metrics } from '@opentelemetry/api'
+
+const observer = otelObserver({
+  tracer: trace.getTracer('my-app'),
+  meter: metrics.getMeter('my-app'),
+})
+
+const result = await generateImage({
+  adapter: openaiImage('gpt-image-1'),
+  prompt: 'A serene mountain landscape at sunset',
+  observers: [observer],
+})
+```
+
+Each call produces one `CLIENT` span tagged with the activity's `gen_ai.operation.name`:
+
+| Activity | `gen_ai.operation.name` |
+| --- | --- |
+| `generateImage` | `image_generation` |
+| `generateVideo` | `video_generation` |
+| `generateAudio` | `audio_generation` |
+| `generateSpeech` | `text_to_speech` |
+| `generateTranscription` | `transcription` |
+
+The span carries `gen_ai.system` and `gen_ai.request.model` at start and, on finish, the same `gen_ai.usage.*` / `tanstack.ai.usage.*` attributes documented above — including `tanstack.ai.usage.units_billed` for unit-billed media. When a `Meter` is supplied it records the `gen_ai.client.operation.duration` histogram, tagged per activity. For streaming video the span covers the full create → poll → complete lifecycle; for non-streaming `generateVideo` it covers job submission.
+
+`otelObserver` supports the same `spanNameFormatter` and `attributeEnricher` extension points. For a custom backend, implement the `ActivityObserver` contract (`onStart` / `onFinish` / `onError`) directly — its event payload is discriminated by `activity`. The observer types are exported from the package root; the `otelObserver` value lives on the `@tanstack/ai/observability` subpath so importing `@tanstack/ai` never requires the optional `@opentelemetry/api` peer.
+
 ## Related
 
 - [Middleware](./middleware) — the lifecycle this middleware hooks into

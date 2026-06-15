@@ -8,8 +8,14 @@
 import { aiEventClient } from '@tanstack/ai-event-client'
 import { streamGenerationResult } from '../stream-generation-result.js'
 import { resolveDebugOption } from '../../logger/resolve'
+import {
+  notifyObserverError,
+  notifyObserverFinish,
+  notifyObserverStart,
+} from '../../observability/notify'
 import type { InternalLogger } from '../../logger/internal-logger'
 import type { DebugOption } from '../../logger/types'
+import type { ActivityObserver } from '../../observability/types'
 import type { AudioAdapter } from './adapter'
 import type { AudioGenerationResult, StreamChunk } from '../../types'
 
@@ -70,6 +76,12 @@ export interface AudioActivityOptions<
    * control and/or a custom `Logger`.
    */
   debug?: DebugOption
+  /**
+   * Observability hooks notified on start, success, and error. Pass
+   * `otelObserver()` to emit OpenTelemetry spans, or implement the
+   * `ActivityObserver` contract for a custom backend.
+   */
+  observers?: Array<ActivityObserver>
 }
 
 // ===========================
@@ -135,7 +147,7 @@ async function runGenerateAudio<
 >(
   options: AudioActivityOptions<TAdapter, boolean>,
 ): Promise<AudioGenerationResult> {
-  const { adapter, stream: _stream, debug: _debug, ...rest } = options
+  const { adapter, stream: _stream, debug: _debug, observers, ...rest } = options
   const model = adapter.model
   const requestId = createId('audio')
   const startTime = Date.now()
@@ -144,6 +156,18 @@ async function runGenerateAudio<
     (adapter as { name?: string; provider?: string }).provider ??
     (adapter as { name?: string }).name ??
     'unknown'
+
+  await notifyObserverStart(
+    observers,
+    {
+      activity: 'audio',
+      requestId,
+      provider: adapter.name,
+      model,
+      modelOptions: rest.modelOptions,
+    },
+    logger,
+  )
 
   aiEventClient.emit('audio:request:started', {
     requestId,
@@ -189,6 +213,19 @@ async function runGenerateAudio<
       audioDuration: result.audio.duration,
     })
 
+    await notifyObserverFinish(
+      observers,
+      {
+        activity: 'audio',
+        requestId,
+        provider: adapter.name,
+        model,
+        durationMs: elapsedMs,
+        usage: result.usage,
+      },
+      logger,
+    )
+
     return result
   } catch (error) {
     const elapsedMs = Date.now() - startTime
@@ -202,6 +239,18 @@ async function runGenerateAudio<
       modelOptions: rest.modelOptions as Record<string, unknown> | undefined,
       timestamp: Date.now(),
     })
+    await notifyObserverError(
+      observers,
+      {
+        activity: 'audio',
+        requestId,
+        provider: adapter.name,
+        model,
+        durationMs: elapsedMs,
+        error,
+      },
+      logger,
+    )
     logger.errors('generateAudio activity failed', {
       error,
       source: 'generateAudio',

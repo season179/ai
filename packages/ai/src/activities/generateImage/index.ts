@@ -8,8 +8,14 @@
 import { aiEventClient } from '@tanstack/ai-event-client'
 import { streamGenerationResult } from '../stream-generation-result.js'
 import { resolveDebugOption } from '../../logger/resolve'
+import {
+  notifyObserverError,
+  notifyObserverFinish,
+  notifyObserverStart,
+} from '../../observability/notify'
 import type { InternalLogger } from '../../logger/internal-logger'
 import type { DebugOption } from '../../logger/types'
+import type { ActivityObserver } from '../../observability/types'
 import type { ImageAdapter } from './adapter'
 import type { ImageGenerationResult, StreamChunk } from '../../types'
 
@@ -92,6 +98,12 @@ export type ImageActivityOptions<
    * control and/or a custom `Logger`.
    */
   debug?: DebugOption
+  /**
+   * Observability hooks notified on start, success, and error. Pass
+   * `otelObserver()` to emit OpenTelemetry spans, or implement the
+   * `ActivityObserver` contract for a custom backend.
+   */
+  observers?: Array<ActivityObserver>
 } & ({} extends ImageProviderOptionsForModel<TAdapter, TAdapter['model']>
   ? {
       /** Provider-specific options for image generation */ modelOptions?: ImageProviderOptionsForModel<
@@ -197,11 +209,23 @@ async function runGenerateImage<
 >(
   options: ImageActivityOptions<TAdapter, boolean>,
 ): Promise<ImageGenerationResult> {
-  const { adapter, stream: _stream, debug: _debug, ...rest } = options
+  const { adapter, stream: _stream, debug: _debug, observers, ...rest } = options
   const model = adapter.model
   const requestId = createId('image')
   const startTime = Date.now()
   const logger: InternalLogger = resolveDebugOption(options.debug)
+
+  await notifyObserverStart(
+    observers,
+    {
+      activity: 'image',
+      requestId,
+      provider: adapter.name,
+      model,
+      modelOptions: rest.modelOptions,
+    },
+    logger,
+  )
 
   aiEventClient.emit('image:request:started', {
     requestId,
@@ -255,8 +279,33 @@ async function runGenerateImage<
       count: result.images.length,
     })
 
+    await notifyObserverFinish(
+      observers,
+      {
+        activity: 'image',
+        requestId,
+        provider: adapter.name,
+        model,
+        durationMs: duration,
+        usage: result.usage,
+      },
+      logger,
+    )
+
     return result
   } catch (error) {
+    await notifyObserverError(
+      observers,
+      {
+        activity: 'image',
+        requestId,
+        provider: adapter.name,
+        model,
+        durationMs: Date.now() - startTime,
+        error,
+      },
+      logger,
+    )
     logger.errors('generateImage activity failed', {
       error,
       source: 'generateImage',

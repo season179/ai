@@ -33,6 +33,10 @@
       "types": "./dist/esm/middlewares/otel.d.ts",
       "import": "./dist/esm/middlewares/otel.js"
     },
+    "./observability": {
+      "types": "./dist/esm/observability/index.d.ts",
+      "import": "./dist/esm/observability/index.js"
+    },
     "./adapter-internals": {
       "types": "./dist/esm/adapter-internals.d.ts",
       "import": "./dist/esm/adapter-internals.js"

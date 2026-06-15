@@ -118,6 +118,18 @@ export type {
   ErrorInfo,
 } from './activities/chat/middleware/index'
 
+// Observability — activity-agnostic observer types. Pure types only; the
+// `otelObserver` value lives at `@tanstack/ai/observability` so the root barrel
+// never requires the optional `@opentelemetry/api` peer dependency.
+export type {
+  ActivityObserver,
+  ActivityKind,
+  ActivityEventBase,
+  ActivityStartEvent,
+  ActivityFinishEvent,
+  ActivityErrorEvent,
+} from './observability/types'
+
 // All types
 export * from './types'
 
