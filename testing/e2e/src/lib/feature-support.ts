@@ -140,11 +140,17 @@ export const matrix: Record<Feature, Set<Provider>> = {
   // (or per-feature override in `features.ts`) must opt into combined mode
   // — otherwise the engine takes the legacy finalization path, which makes
   // an extra request that this feature's fixture doesn't model.
+  //
+  // openrouter (#612): its default test model `openai/gpt-4o` is a member of
+  // OPENROUTER_COMBINED_TOOLS_AND_SCHEMA_MODELS, so the chat adapter's
+  // `supportsCombinedToolsAndSchema()` returns true and the engine takes the
+  // native combined path — same single-request shape this fixture models.
   'agentic-structured-stream': new Set([
     'openai',
     'anthropic',
     'gemini',
     'grok',
+    'openrouter',
   ]),
   'multimodal-image': new Set([
     'openai',
