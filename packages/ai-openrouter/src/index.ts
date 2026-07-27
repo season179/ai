@@ -83,7 +83,7 @@ export {
   generateId,
   buildHeaders,
   type OpenRouterClientConfig,
-} from './utils'
+} from './utils/client'
 
 // ============================================================================
 // Tool Exports
@@ -91,7 +91,7 @@ export {
 
 export { convertToolsToProviderFormat } from './tools/tool-converter'
 
-export type { OpenRouterTool, FunctionTool, WebSearchTool } from './tools'
+export type { OpenRouterTool, FunctionTool, WebSearchTool } from './tools/index'
 
 // Export provider usage types
 export type { OpenRouterProviderUsageDetails } from './usage'
