@@ -16,6 +16,7 @@ import { Route as SandboxesRouteImport } from './routes/sandboxes'
 import { Route as ResumableRouteImport } from './routes/resumable'
 import { Route as RealtimeRouteImport } from './routes/realtime'
 import { Route as QueueingRouteImport } from './routes/queueing'
+import { Route as PersistentChatRouteImport } from './routes/persistent-chat'
 import { Route as McpDemoRouteImport } from './routes/mcp-demo'
 import { Route as McpAppsRouteImport } from './routes/mcp-apps'
 import { Route as Issue176ToolResultRouteImport } from './routes/issue-176-tool-result'
@@ -41,6 +42,7 @@ import { Route as ApiStructuredOutputRouteImport } from './routes/api.structured
 import { Route as ApiStructuredChatRouteImport } from './routes/api.structured-chat'
 import { Route as ApiSandboxTriageRouteImport } from './routes/api.sandbox-triage'
 import { Route as ApiResumableRouteImport } from './routes/api.resumable'
+import { Route as ApiPersistentChatRouteImport } from './routes/api.persistent-chat'
 import { Route as ApiMcpTasksServerRouteImport } from './routes/api.mcp-tasks-server'
 import { Route as ApiMcpTasksChatRouteImport } from './routes/api.mcp-tasks-chat'
 import { Route as ApiMcpStatusRouteImport } from './routes/api.mcp-status'
@@ -95,6 +97,11 @@ const RealtimeRoute = RealtimeRouteImport.update({
 const QueueingRoute = QueueingRouteImport.update({
   id: '/queueing',
   path: '/queueing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PersistentChatRoute = PersistentChatRouteImport.update({
+  id: '/persistent-chat',
+  path: '/persistent-chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const McpDemoRoute = McpDemoRouteImport.update({
@@ -225,6 +232,11 @@ const ApiResumableRoute = ApiResumableRouteImport.update({
   path: '/api/resumable',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPersistentChatRoute = ApiPersistentChatRouteImport.update({
+  id: '/api/persistent-chat',
+  path: '/api/persistent-chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMcpTasksServerRoute = ApiMcpTasksServerRouteImport.update({
   id: '/api/mcp-tasks-server',
   path: '/api/mcp-tasks-server',
@@ -336,6 +348,7 @@ export interface FileRoutesByFullPath {
   '/issue-176-tool-result': typeof Issue176ToolResultRoute
   '/mcp-apps': typeof McpAppsRoute
   '/mcp-demo': typeof McpDemoRoute
+  '/persistent-chat': typeof PersistentChatRoute
   '/queueing': typeof QueueingRoute
   '/realtime': typeof RealtimeRoute
   '/resumable': typeof ResumableRoute
@@ -357,6 +370,7 @@ export interface FileRoutesByFullPath {
   '/api/mcp-status': typeof ApiMcpStatusRoute
   '/api/mcp-tasks-chat': typeof ApiMcpTasksChatRoute
   '/api/mcp-tasks-server': typeof ApiMcpTasksServerRoute
+  '/api/persistent-chat': typeof ApiPersistentChatRoute
   '/api/resumable': typeof ApiResumableRoute
   '/api/sandbox-triage': typeof ApiSandboxTriageRoute
   '/api/structured-chat': typeof ApiStructuredChatRoute
@@ -390,6 +404,7 @@ export interface FileRoutesByTo {
   '/issue-176-tool-result': typeof Issue176ToolResultRoute
   '/mcp-apps': typeof McpAppsRoute
   '/mcp-demo': typeof McpDemoRoute
+  '/persistent-chat': typeof PersistentChatRoute
   '/queueing': typeof QueueingRoute
   '/realtime': typeof RealtimeRoute
   '/resumable': typeof ResumableRoute
@@ -411,6 +426,7 @@ export interface FileRoutesByTo {
   '/api/mcp-status': typeof ApiMcpStatusRoute
   '/api/mcp-tasks-chat': typeof ApiMcpTasksChatRoute
   '/api/mcp-tasks-server': typeof ApiMcpTasksServerRoute
+  '/api/persistent-chat': typeof ApiPersistentChatRoute
   '/api/resumable': typeof ApiResumableRoute
   '/api/sandbox-triage': typeof ApiSandboxTriageRoute
   '/api/structured-chat': typeof ApiStructuredChatRoute
@@ -445,6 +461,7 @@ export interface FileRoutesById {
   '/issue-176-tool-result': typeof Issue176ToolResultRoute
   '/mcp-apps': typeof McpAppsRoute
   '/mcp-demo': typeof McpDemoRoute
+  '/persistent-chat': typeof PersistentChatRoute
   '/queueing': typeof QueueingRoute
   '/realtime': typeof RealtimeRoute
   '/resumable': typeof ResumableRoute
@@ -466,6 +483,7 @@ export interface FileRoutesById {
   '/api/mcp-status': typeof ApiMcpStatusRoute
   '/api/mcp-tasks-chat': typeof ApiMcpTasksChatRoute
   '/api/mcp-tasks-server': typeof ApiMcpTasksServerRoute
+  '/api/persistent-chat': typeof ApiPersistentChatRoute
   '/api/resumable': typeof ApiResumableRoute
   '/api/sandbox-triage': typeof ApiSandboxTriageRoute
   '/api/structured-chat': typeof ApiStructuredChatRoute
@@ -501,6 +519,7 @@ export interface FileRouteTypes {
     | '/issue-176-tool-result'
     | '/mcp-apps'
     | '/mcp-demo'
+    | '/persistent-chat'
     | '/queueing'
     | '/realtime'
     | '/resumable'
@@ -522,6 +541,7 @@ export interface FileRouteTypes {
     | '/api/mcp-status'
     | '/api/mcp-tasks-chat'
     | '/api/mcp-tasks-server'
+    | '/api/persistent-chat'
     | '/api/resumable'
     | '/api/sandbox-triage'
     | '/api/structured-chat'
@@ -555,6 +575,7 @@ export interface FileRouteTypes {
     | '/issue-176-tool-result'
     | '/mcp-apps'
     | '/mcp-demo'
+    | '/persistent-chat'
     | '/queueing'
     | '/realtime'
     | '/resumable'
@@ -576,6 +597,7 @@ export interface FileRouteTypes {
     | '/api/mcp-status'
     | '/api/mcp-tasks-chat'
     | '/api/mcp-tasks-server'
+    | '/api/persistent-chat'
     | '/api/resumable'
     | '/api/sandbox-triage'
     | '/api/structured-chat'
@@ -609,6 +631,7 @@ export interface FileRouteTypes {
     | '/issue-176-tool-result'
     | '/mcp-apps'
     | '/mcp-demo'
+    | '/persistent-chat'
     | '/queueing'
     | '/realtime'
     | '/resumable'
@@ -630,6 +653,7 @@ export interface FileRouteTypes {
     | '/api/mcp-status'
     | '/api/mcp-tasks-chat'
     | '/api/mcp-tasks-server'
+    | '/api/persistent-chat'
     | '/api/resumable'
     | '/api/sandbox-triage'
     | '/api/structured-chat'
@@ -664,6 +688,7 @@ export interface RootRouteChildren {
   Issue176ToolResultRoute: typeof Issue176ToolResultRoute
   McpAppsRoute: typeof McpAppsRoute
   McpDemoRoute: typeof McpDemoRoute
+  PersistentChatRoute: typeof PersistentChatRoute
   QueueingRoute: typeof QueueingRoute
   RealtimeRoute: typeof RealtimeRoute
   ResumableRoute: typeof ResumableRoute
@@ -685,6 +710,7 @@ export interface RootRouteChildren {
   ApiMcpStatusRoute: typeof ApiMcpStatusRoute
   ApiMcpTasksChatRoute: typeof ApiMcpTasksChatRoute
   ApiMcpTasksServerRoute: typeof ApiMcpTasksServerRoute
+  ApiPersistentChatRoute: typeof ApiPersistentChatRoute
   ApiResumableRoute: typeof ApiResumableRoute
   ApiSandboxTriageRoute: typeof ApiSandboxTriageRoute
   ApiStructuredChatRoute: typeof ApiStructuredChatRoute
@@ -758,6 +784,13 @@ declare module '@tanstack/react-router' {
       path: '/queueing'
       fullPath: '/queueing'
       preLoaderRoute: typeof QueueingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/persistent-chat': {
+      id: '/persistent-chat'
+      path: '/persistent-chat'
+      fullPath: '/persistent-chat'
+      preLoaderRoute: typeof PersistentChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mcp-demo': {
@@ -935,6 +968,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiResumableRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/persistent-chat': {
+      id: '/api/persistent-chat'
+      path: '/api/persistent-chat'
+      fullPath: '/api/persistent-chat'
+      preLoaderRoute: typeof ApiPersistentChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mcp-tasks-server': {
       id: '/api/mcp-tasks-server'
       path: '/api/mcp-tasks-server'
@@ -1088,6 +1128,7 @@ const rootRouteChildren: RootRouteChildren = {
   Issue176ToolResultRoute: Issue176ToolResultRoute,
   McpAppsRoute: McpAppsRoute,
   McpDemoRoute: McpDemoRoute,
+  PersistentChatRoute: PersistentChatRoute,
   QueueingRoute: QueueingRoute,
   RealtimeRoute: RealtimeRoute,
   ResumableRoute: ResumableRoute,
@@ -1109,6 +1150,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMcpStatusRoute: ApiMcpStatusRoute,
   ApiMcpTasksChatRoute: ApiMcpTasksChatRoute,
   ApiMcpTasksServerRoute: ApiMcpTasksServerRoute,
+  ApiPersistentChatRoute: ApiPersistentChatRoute,
   ApiResumableRoute: ApiResumableRoute,
   ApiSandboxTriageRoute: ApiSandboxTriageRoute,
   ApiStructuredChatRoute: ApiStructuredChatRoute,
