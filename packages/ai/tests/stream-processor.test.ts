@@ -871,8 +871,33 @@ describe('StreamProcessor', () => {
         )
         processor.processChunk(ev.toolArgs('tc-1', ' '))
 
-        // The revert path must not downgrade the call back to input-streaming.
-        expect(toolCallPart(processor)?.state).not.toBe('input-streaming')
+        // Neither the revert path nor the argument part-update may rewrite
+        // the terminal error state.
+        expect(toolCallPart(processor)?.state).toBe('error')
+      })
+
+      it('TOOL_CALL_END.input does not rewrite an approval-requested part', () => {
+        const processor = new StreamProcessor()
+        processor.prepareAssistantMessage()
+
+        processor.processChunk(ev.runStarted())
+        processor.processChunk(ev.toolStart('tc-1', 'offerTemplates'))
+        processor.processChunk(ev.toolArgs('tc-1', FULL_ARGS))
+        processor.processChunk(ev.textContent('Running it. '))
+        // Approval raised while the inferred flag is still set.
+        processor.processChunk(
+          ev.custom('approval-requested', {
+            toolCallId: 'tc-1',
+            toolName: 'offerTemplates',
+            input: FULL_INPUT,
+            approval: { id: 'appr-1', needsApproval: true },
+          }),
+        )
+        processor.processChunk(
+          ev.toolEnd('tc-1', 'offerTemplates', { input: FULL_INPUT }),
+        )
+
+        expect(toolCallPart(processor)?.state).toBe('approval-requested')
       })
 
       it('TOOL_CALL_END.input repairs a call inferred complete before any args', () => {

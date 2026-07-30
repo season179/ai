@@ -1326,18 +1326,19 @@ export class StreamProcessor {
     const existingToolCall = state.toolCalls.get(toolCallId)
     if (!existingToolCall) return
 
+    // A rendered part in a terminal error/approval state must not be rewritten
+    // by argument updates — a stray TOOL_CALL_ARGS after an out-of-order error
+    // result or approval interrupt would downgrade the visible state.
+    const partIsSettled = this.isToolCallPartSettled(existingToolCall.id)
+
     // Args arriving for a call that was force-completed by interleaved text
     // proves that inference wrong — resume streaming so TOOL_CALL_END (or
     // stream termination) re-completes it with the full arguments (#1017).
-    // A call whose rendered part reached a terminal error/approval state after
-    // the flag was set must not be re-opened, or the part update below would
-    // downgrade that visible state to 'input-streaming'.
+    // A call whose rendered part settled after the flag was set must not be
+    // re-opened.
     if (existingToolCall.inferredComplete) {
       existingToolCall.inferredComplete = false
-      if (
-        !this.isToolCallPartErrored(existingToolCall.id) &&
-        !this.isToolCallPartAwaitingUserAction(existingToolCall.id)
-      ) {
+      if (!partIsSettled) {
         existingToolCall.state = 'input-streaming'
       }
     }
@@ -1356,6 +1357,9 @@ export class StreamProcessor {
     existingToolCall.parsedArguments = this.jsonParser.parse(
       existingToolCall.arguments,
     )
+
+    // Keep accumulating internally, but leave a settled part untouched.
+    if (partIsSettled) return
 
     // Update UIMessage
     this.messages = updateToolCallPart(this.messages, messageId, {
@@ -1428,9 +1432,17 @@ export class StreamProcessor {
       // and refresh the rendered part's `input` so it reflects the canonical
       // value rather than the possibly-divergent accumulated-args parse that
       // completeToolCall wrote (e.g. an adapter that coerces values differently
-      // between the streamed args and the final structured input).
+      // between the streamed args and the final structured input). A settled
+      // part (terminal error / approval flow) keeps the canonical parse
+      // internally but must not have its visible state rewritten — the same
+      // protection completeToolCall applies to its own part write.
       if (chunk.input !== undefined) {
         existingToolCall.parsedArguments = chunk.input
+      }
+      if (
+        chunk.input !== undefined &&
+        !this.isToolCallPartSettled(existingToolCall.id)
+      ) {
         this.messages = updateToolCallPart(this.messages, messageId, {
           id: existingToolCall.id,
           name: existingToolCall.name,
@@ -2161,6 +2173,17 @@ export class StreamProcessor {
       toolCall.id,
       'input-complete',
       toolCall.arguments,
+    )
+  }
+
+  /**
+   * Whether the rendered tool-call part is in a state that streaming input
+   * updates must never rewrite: terminal 'error' or an approval flow.
+   */
+  private isToolCallPartSettled(toolCallId: string): boolean {
+    return (
+      this.isToolCallPartErrored(toolCallId) ||
+      this.isToolCallPartAwaitingUserAction(toolCallId)
     )
   }
 
