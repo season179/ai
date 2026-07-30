@@ -1329,9 +1329,17 @@ export class StreamProcessor {
     // Args arriving for a call that was force-completed by interleaved text
     // proves that inference wrong — resume streaming so TOOL_CALL_END (or
     // stream termination) re-completes it with the full arguments (#1017).
+    // A call whose rendered part reached a terminal error/approval state after
+    // the flag was set must not be re-opened, or the part update below would
+    // downgrade that visible state to 'input-streaming'.
     if (existingToolCall.inferredComplete) {
-      existingToolCall.state = 'input-streaming'
       existingToolCall.inferredComplete = false
+      if (
+        !this.isToolCallPartErrored(existingToolCall.id) &&
+        !this.isToolCallPartAwaitingUserAction(existingToolCall.id)
+      ) {
+        existingToolCall.state = 'input-streaming'
+      }
     }
 
     const wasAwaitingInput = existingToolCall.state === 'awaiting-input'
@@ -2116,7 +2124,10 @@ export class StreamProcessor {
     // terminal 'error' state (e.g. an output-error TOOL_CALL_RESULT arrived
     // without a preceding TOOL_CALL_END). The RUN_FINISHED / finalizeStream
     // safety net must not clobber a failed call back to 'input-complete'.
+    // Clear the inferred flag too: a call in a guarded terminal UI state must
+    // not be re-opened by the #1017 repair paths (revert-on-args, END repair).
     if (this.isToolCallPartErrored(toolCall.id)) {
+      toolCall.inferredComplete = false
       return
     }
 
@@ -2124,6 +2135,7 @@ export class StreamProcessor {
     // user action before the completion safety net runs. Keep the parsed
     // argument bookkeeping above, but do not downgrade that visible state.
     if (this.isToolCallPartAwaitingUserAction(toolCall.id)) {
+      toolCall.inferredComplete = false
       return
     }
 

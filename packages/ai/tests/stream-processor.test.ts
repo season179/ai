@@ -853,6 +853,28 @@ describe('StreamProcessor', () => {
         expect(part?.input).toEqual(FULL_INPUT)
       })
 
+      it('stray args do not re-open an inferred-complete call whose part errored', () => {
+        const processor = new StreamProcessor()
+        processor.prepareAssistantMessage()
+
+        processor.processChunk(ev.runStarted())
+        processor.processChunk(ev.toolStart('tc-1', 'offerTemplates'))
+        processor.processChunk(ev.toolArgs('tc-1', FULL_ARGS))
+        processor.processChunk(ev.textContent('Running it. '))
+        // Out-of-order error result while the inferred flag is still set.
+        processor.processChunk(
+          chunk(EventType.TOOL_CALL_RESULT, {
+            toolCallId: 'tc-1',
+            content: '{"error":"boom"}',
+            state: 'output-error',
+          }),
+        )
+        processor.processChunk(ev.toolArgs('tc-1', ' '))
+
+        // The revert path must not downgrade the call back to input-streaming.
+        expect(toolCallPart(processor)?.state).not.toBe('input-streaming')
+      })
+
       it('TOOL_CALL_END.input repairs a call inferred complete before any args', () => {
         const processor = new StreamProcessor()
         processor.prepareAssistantMessage()
