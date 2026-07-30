@@ -25,6 +25,11 @@ export interface InternalToolCallState {
   state: ToolCallState
   parsedArguments?: any
   index: number
+  /** True when the call was force-completed by an inference (text arriving
+   * implies tool calls are done) rather than an authoritative TOOL_CALL_END.
+   * Later TOOL_CALL_ARGS revert such a call to `input-streaming`, and
+   * TOOL_CALL_END may re-complete it. See GitHub issue #1017. */
+  inferredComplete?: boolean
   /** Provider-specific metadata that round-trips with the tool call
    * (e.g. Gemini's `thoughtSignature`). Untyped at this layer because
    * the stream processor is provider-agnostic; adapters narrow it

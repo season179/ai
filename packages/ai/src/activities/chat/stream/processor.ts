@@ -870,8 +870,9 @@ export class StreamProcessor {
       this.emitTextUpdateForMessage(messageId)
     }
 
-    // Complete all tool calls for this message
-    this.completeAllToolCallsForMessage(messageId)
+    // Complete all tool calls for this message. Inferred: TEXT_MESSAGE_END
+    // says the text segment ended, not that tool-call args finished streaming.
+    this.completeAllToolCallsForMessage(messageId, { inferred: true })
   }
 
   /**
@@ -1122,8 +1123,11 @@ export class StreamProcessor {
   ): void {
     const { messageId, state } = this.ensureAssistantMessage(chunk.messageId)
 
-    // Content arriving means all current tool calls for this message are complete
-    this.completeAllToolCallsForMessage(messageId)
+    // Content arriving usually means all current tool calls for this message
+    // are complete — but it's an inference, not an adapter signal. Providers
+    // can interleave text deltas between TOOL_CALL_ARGS deltas, so mark the
+    // completion as inferred to let later tool events correct it (#1017).
+    this.completeAllToolCallsForMessage(messageId, { inferred: true })
 
     if (this.structuredMessageIds.has(messageId)) {
       // `chunk.delta` is incremental; `chunk.content` is sometimes cumulative
@@ -1322,6 +1326,14 @@ export class StreamProcessor {
     const existingToolCall = state.toolCalls.get(toolCallId)
     if (!existingToolCall) return
 
+    // Args arriving for a call that was force-completed by interleaved text
+    // proves that inference wrong — resume streaming so TOOL_CALL_END (or
+    // stream termination) re-completes it with the full arguments (#1017).
+    if (existingToolCall.inferredComplete) {
+      existingToolCall.state = 'input-streaming'
+      existingToolCall.inferredComplete = false
+    }
+
     const wasAwaitingInput = existingToolCall.state === 'awaiting-input'
 
     // Accumulate arguments from delta
@@ -1378,9 +1390,17 @@ export class StreamProcessor {
     const msgState = this.getMessageState(messageId)
     if (!msgState) return
 
-    // Transition the tool call to input-complete (the authoritative completion signal)
+    // Transition the tool call to input-complete (the authoritative completion
+    // signal). A call already input-complete is normally left untouched, but a
+    // completion that was merely inferred from interleaved text may have
+    // parsed truncated arguments — this authoritative END re-completes it with
+    // the full accumulated arguments (#1017).
     const existingToolCall = msgState.toolCalls.get(chunk.toolCallId)
-    if (existingToolCall && existingToolCall.state !== 'input-complete') {
+    if (
+      existingToolCall &&
+      (existingToolCall.state !== 'input-complete' ||
+        existingToolCall.inferredComplete)
+    ) {
       // If TOOL_CALL_END provides parsed input and no TOOL_CALL_ARGS were
       // received, back-fill the arguments string so the UIMessage ToolCallPart
       // carries the correct value (defensive against adapters that skip ARGS).
@@ -2036,16 +2056,29 @@ export class StreamProcessor {
   }
 
   /**
-   * Complete all tool calls for a specific message
+   * Complete all tool calls for a specific message.
+   *
+   * Pass `inferred: true` when completion is a heuristic (text arriving
+   * implies the tool calls are done) rather than a terminal signal, so later
+   * TOOL_CALL_ARGS / TOOL_CALL_END events can correct a wrong inference.
    */
-  private completeAllToolCallsForMessage(messageId: string): void {
+  private completeAllToolCallsForMessage(
+    messageId: string,
+    opts?: { inferred?: boolean },
+  ): void {
     const state = this.getMessageState(messageId)
     if (!state) return
 
     state.toolCalls.forEach((toolCall, id) => {
       if (toolCall.state !== 'input-complete') {
         const index = state.toolCallOrder.indexOf(id)
-        this.completeToolCall(messageId, index, toolCall)
+        this.completeToolCall(messageId, index, toolCall, opts)
+      } else if (!opts?.inferred) {
+        // Terminal signal (RUN_FINISHED / finalizeStream) confirms any earlier
+        // inferred completion — the repair window must not survive the stream,
+        // or stray post-finalize TOOL_CALL_ARGS / TOOL_CALL_END events could
+        // revert or clobber a settled call.
+        toolCall.inferredComplete = false
       }
     })
   }
@@ -2057,14 +2090,27 @@ export class StreamProcessor {
     messageId: string,
     _index: number,
     toolCall: InternalToolCallState,
+    opts?: { inferred?: boolean },
   ): void {
     // Finalize the internal bookkeeping: the call's input arguments ARE
     // complete regardless of whether execution later failed, so the call still
     // counts as a completed tool call in getCompletedToolCalls()/getState().
     toolCall.state = 'input-complete'
+    toolCall.inferredComplete = opts?.inferred === true
 
-    // Try final parse
-    toolCall.parsedArguments = this.jsonParser.parse(toolCall.arguments)
+    // Final parse. `input` on the rendered part must only come from a strict
+    // parse: the lenient partial-JSON parser closes unterminated values, so an
+    // inferred completion over truncated arguments would surface a
+    // plausible-looking but silently corrupted input (GitHub issue #1017).
+    // When strict parsing fails, `input` stays unset and consumers fall back
+    // to the raw `arguments` string, as documented on ToolCallPart.
+    let strictParseSucceeded = false
+    try {
+      toolCall.parsedArguments = JSON.parse(toolCall.arguments)
+      strictParseSucceeded = true
+    } catch {
+      toolCall.parsedArguments = this.jsonParser.parse(toolCall.arguments)
+    }
 
     // Don't downgrade the rendered part of a call that already reached the
     // terminal 'error' state (e.g. an output-error TOOL_CALL_RESULT arrived
@@ -2092,9 +2138,7 @@ export class StreamProcessor {
       name: toolCall.name,
       arguments: toolCall.arguments,
       state: 'input-complete',
-      ...(toolCall.parsedArguments !== undefined && {
-        input: toolCall.parsedArguments,
-      }),
+      ...(strictParseSucceeded && { input: toolCall.parsedArguments }),
       ...(toolCall.metadata !== undefined && { metadata: toolCall.metadata }),
     })
     this.emitMessagesChange()

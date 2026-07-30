@@ -752,6 +752,126 @@ describe('StreamProcessor', () => {
       expect((parts[3] as any).content).toBe("It's 72F in NYC.")
     })
 
+    // GitHub issue #1017: a TEXT_MESSAGE_CONTENT delta between two
+    // TOOL_CALL_ARGS deltas force-completed the tool call, populated `input`
+    // from a lenient partial-JSON parse of the truncated arguments, and the
+    // later authoritative TOOL_CALL_END was skipped — permanently corrupting
+    // `input` while `arguments` held the full JSON.
+    describe('text interleaved between tool-call args (#1017)', () => {
+      const ARGS_HEAD = '{"templateIds":["mock-gsk-e'
+      const ARGS_TAIL = 'fimosfermin"]}'
+      const FULL_ARGS = ARGS_HEAD + ARGS_TAIL
+      const FULL_INPUT = { templateIds: ['mock-gsk-efimosfermin'] }
+
+      const toolCallPart = (processor: StreamProcessor) =>
+        processor
+          .getMessages()
+          .flatMap((m) => m.parts)
+          .find((p): p is ToolCallPart => p.type === 'tool-call')
+
+      it('TOOL_CALL_END re-completes a call inferred complete by interleaved text', () => {
+        const processor = new StreamProcessor()
+        processor.prepareAssistantMessage()
+
+        processor.processChunk(ev.runStarted())
+        processor.processChunk(ev.toolStart('tc-1', 'offerTemplates'))
+        processor.processChunk(ev.toolArgs('tc-1', ARGS_HEAD))
+        processor.processChunk(ev.textContent('Let me look those up. '))
+        processor.processChunk(ev.toolArgs('tc-1', ARGS_TAIL))
+        processor.processChunk(ev.toolEnd('tc-1', 'offerTemplates'))
+        processor.processChunk(ev.runFinished('stop'))
+        processor.finalizeStream()
+
+        const part = toolCallPart(processor)
+        expect(part?.state).toBe('input-complete')
+        expect(part?.arguments).toBe(FULL_ARGS)
+        expect(part?.input).toEqual(FULL_INPUT)
+      })
+
+      it('never surfaces a lenient parse of truncated args as input', () => {
+        const processor = new StreamProcessor()
+        processor.prepareAssistantMessage()
+
+        processor.processChunk(ev.runStarted())
+        processor.processChunk(ev.toolStart('tc-1', 'offerTemplates'))
+        processor.processChunk(ev.toolArgs('tc-1', ARGS_HEAD))
+        processor.processChunk(ev.textContent('Let me look those up. '))
+
+        // Text force-completes the call, but its args are still truncated:
+        // input must stay unset rather than hold a fabricated value.
+        const during = toolCallPart(processor)
+        expect(during?.state).toBe('input-complete')
+        expect(during?.input).toBeUndefined()
+
+        // The tail never arrives (broken stream) — input stays unset while
+        // the raw arguments string remains available as the fallback.
+        processor.processChunk(ev.toolEnd('tc-1', 'offerTemplates'))
+        processor.processChunk(ev.runFinished('stop'))
+        processor.finalizeStream()
+
+        const part = toolCallPart(processor)
+        expect(part?.state).toBe('input-complete')
+        expect(part?.arguments).toBe(ARGS_HEAD)
+        expect(part?.input).toBeUndefined()
+      })
+
+      it('stream-termination safety net re-completes when TOOL_CALL_END is missing', () => {
+        const processor = new StreamProcessor()
+        processor.prepareAssistantMessage()
+
+        processor.processChunk(ev.runStarted())
+        processor.processChunk(ev.toolStart('tc-1', 'offerTemplates'))
+        processor.processChunk(ev.toolArgs('tc-1', ARGS_HEAD))
+        processor.processChunk(ev.textContent('Let me look those up. '))
+        processor.processChunk(ev.toolArgs('tc-1', ARGS_TAIL))
+        processor.processChunk(ev.runFinished('stop'))
+        processor.finalizeStream()
+
+        const part = toolCallPart(processor)
+        expect(part?.state).toBe('input-complete')
+        expect(part?.arguments).toBe(FULL_ARGS)
+        expect(part?.input).toEqual(FULL_INPUT)
+      })
+
+      it('stream termination closes the repair window (stray post-finalize args do not revert)', () => {
+        const processor = new StreamProcessor()
+        processor.prepareAssistantMessage()
+
+        processor.processChunk(ev.runStarted())
+        processor.processChunk(ev.toolStart('tc-1', 'offerTemplates'))
+        processor.processChunk(ev.toolArgs('tc-1', FULL_ARGS))
+        processor.processChunk(ev.textContent('Done. '))
+        processor.processChunk(ev.runFinished('stop'))
+        processor.finalizeStream()
+
+        // Protocol violation: args after the stream settled. Must behave as
+        // before the #1017 fix — appended, but the call stays input-complete.
+        processor.processChunk(ev.toolArgs('tc-1', 'garbage'))
+
+        const part = toolCallPart(processor)
+        expect(part?.state).toBe('input-complete')
+        expect(part?.input).toEqual(FULL_INPUT)
+      })
+
+      it('TOOL_CALL_END.input repairs a call inferred complete before any args', () => {
+        const processor = new StreamProcessor()
+        processor.prepareAssistantMessage()
+
+        processor.processChunk(ev.runStarted())
+        processor.processChunk(ev.toolStart('tc-1', 'offerTemplates'))
+        processor.processChunk(ev.textContent('Let me look those up. '))
+        processor.processChunk(
+          ev.toolEnd('tc-1', 'offerTemplates', { input: FULL_INPUT }),
+        )
+        processor.processChunk(ev.runFinished('stop'))
+        processor.finalizeStream()
+
+        const part = toolCallPart(processor)
+        expect(part?.state).toBe('input-complete')
+        expect(part?.input).toEqual(FULL_INPUT)
+      })
+    })
+
     it('should create two separate TextParts for text before and after tool calls', () => {
       const processor = new StreamProcessor()
       processor.prepareAssistantMessage()

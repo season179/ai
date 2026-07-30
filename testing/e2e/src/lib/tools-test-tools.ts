@@ -263,6 +263,11 @@ export const SCENARIO_LIST = [
     label: 'Triple Client Sequence',
     category: 'race',
   },
+  {
+    id: 'interleaved-args',
+    label: 'Text Interleaved in Tool Args (Regression #1017)',
+    category: 'race',
+  },
 ]
 
 /**
@@ -331,6 +336,9 @@ export function getToolsForScenario(scenario: string) {
         clientToolDefinitions.show_notification,
         clientToolDefinitions.display_chart,
       ]
+
+    case 'interleaved-args':
+      return [serverTools.get_weather]
 
     case 'lazy-tool-discovery':
       return [serverTools.get_weather, searchInventory]

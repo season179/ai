@@ -167,6 +167,8 @@ The model returns text AND one tool call. This is the most common source of bugs
 2. **`TOOL_CALL_END` MUST come after all `TOOL_CALL_ARGS` for that `toolCallId`.**
    `TOOL_CALL_END` transitions the tool call to `input-complete` state and does a final JSON parse of accumulated arguments. Any `TOOL_CALL_ARGS` after `TOOL_CALL_END` for the same ID will still be processed (appending to arguments), but the state has already been set to `input-complete`.
 
+   Exception: text events (`TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END`) also complete in-flight tool calls, but only as an **inference** — providers can interleave text deltas between `TOOL_CALL_ARGS` deltas. A `TOOL_CALL_ARGS` arriving for such an inferred-complete call reverts it to `input-streaming`, and the authoritative `TOOL_CALL_END` (or stream termination) re-completes it with the full arguments (see GitHub issue #1017).
+
 3. **`RUN_FINISHED` with `finishReason: "tool_calls"` MUST come last.**
    The TextEngine uses this to decide whether to enter the tool execution phase. The StreamProcessor uses it as a signal to force-complete any tool calls still not in `input-complete` state (safety net).
 
@@ -195,8 +197,14 @@ First TOOL_CALL_ARGS         →  state: "input-streaming"     (only if delta is
 Subsequent TOOL_CALL_ARGS    →  state: "input-streaming"     (no change, args accumulate)
 TOOL_CALL_END received       →  state: "input-complete"      (final parse, authoritative)
   OR
+Text event received          →  state: "input-complete"      (inferred; reverted to
+                                                              "input-streaming" if more
+                                                              TOOL_CALL_ARGS arrive)
+  OR
 RUN_FINISHED received        →  state: "input-complete"      (safety net via completeAllToolCalls)
 ```
+
+The part's parsed `input` is only populated when a strict `JSON.parse` of the accumulated arguments succeeds (or when `TOOL_CALL_END.input` supplies it). If the arguments are incomplete or invalid, `input` stays unset and the raw `arguments` string remains the fallback — the lenient partial-JSON parser is never used for `input`, since it would silently truncate values (issue #1017).
 
 ### What the processor does NOT do at this stage
 
@@ -243,7 +251,7 @@ Both orderings are valid. The processor tracks tool calls by `toolCallId` in a `
 
 - Each `TOOL_CALL_START` creates a new entry in the Map. Duplicate `toolCallId` on a second `TOOL_CALL_START` is a no-op (the `if (!existingToolCall)` guard).
 - `TOOL_CALL_ARGS` finds its tool call by `toolCallId`. If the ID is unknown, the event is silently dropped.
-- `TOOL_CALL_END` finds its tool call by `toolCallId`. If already `input-complete`, it's a no-op (the state guard).
+- `TOOL_CALL_END` finds its tool call by `toolCallId`. If already authoritatively `input-complete`, it's a no-op (the state guard). If the completion was merely inferred from interleaved text, `TOOL_CALL_END` re-completes the call with the full accumulated arguments.
 - `RUN_FINISHED` with `completeAllToolCalls()` force-completes any tool call not yet `input-complete`.
 
 ### Final UIMessage parts
