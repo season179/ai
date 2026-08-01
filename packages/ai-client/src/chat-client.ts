@@ -88,6 +88,11 @@ type ChatClientUpdateOptionsWithoutContext<
     resumeState: ChatResumeState | null,
     pendingInterrupts: BoundInterrupts<TTools>,
   ) => void
+  /**
+   * Fires whenever the id of the run in flight changes: the new id when a run
+   * starts (including a rejoin), `null` when it settles.
+   */
+  onRunIdChange?: (runId: string | null) => void
   onInterruptStateChange?: (state: ChatInterruptState<TTools>) => void
   onCustomEvent?: (
     eventType: string,
@@ -387,6 +392,7 @@ export class ChatClient<
         resumeState: ChatResumeState | null,
         pendingInterrupts: BoundInterrupts<TTools>,
       ) => void
+      onRunIdChange: (runId: string | null) => void
       onInterruptStateChange: (state: ChatInterruptState<TTools>) => void
       onCustomEvent: (
         eventType: string,
@@ -467,6 +473,7 @@ export class ChatClient<
           options.onSessionGeneratingChange || (() => {}),
         onQueueChange: options.onQueueChange || (() => {}),
         onResumeStateChange: options.onResumeStateChange || (() => {}),
+        onRunIdChange: options.onRunIdChange || (() => {}),
         onInterruptStateChange: options.onInterruptStateChange || (() => {}),
         onCustomEvent: options.onCustomEvent || (() => {}),
       },
@@ -860,7 +867,6 @@ export class ChatClient<
         // approval card (and hang on a stream that never comes), so the interrupt
         // always wins.
         this.applyResumeSnapshot({
-          schemaVersion: 2,
           resumeState: {
             threadId: this.threadId,
             runId: result.interrupts.runId,
@@ -1048,6 +1054,23 @@ export class ChatClient<
    */
   getResumeState(): ChatResumeState | null {
     return this.lastResume ? { ...this.lastResume } : null
+  }
+
+  /**
+   * The id of the run this client has in flight — one it started via a send or
+   * rejoined via `joinRun` — or null when there is none. Unlike
+   * {@link getResumeState}, this tracks ordinary runs too, not only one that is
+   * interrupted or being resumed. A run another client started and that arrives
+   * over a live subscription is not this client's run and is not reported here.
+   */
+  getCurrentRunId(): string | null {
+    return this.currentRunId
+  }
+
+  private setCurrentRunId(runId: string | null): void {
+    if (this.currentRunId === runId) return
+    this.currentRunId = runId
+    this.callbacksRef.current.onRunIdChange(runId)
   }
 
   getInterruptState(): ChatInterruptState<TTools> {
@@ -1256,7 +1279,6 @@ export class ChatClient<
     }
     const descriptors = this.interruptManager.getDescriptors()
     this.persistor.persistResumeSnapshot({
-      schemaVersion: 2,
       resumeState,
       ...(descriptors.length > 0
         ? { pendingInterrupts: [...descriptors] }
@@ -1452,7 +1474,7 @@ export class ChatClient<
     if (!joinRun) return
     const controller = new AbortController()
     this.abortController = controller
-    this.currentRunId = runId
+    this.setCurrentRunId(runId)
     // Record the resume state in-memory BEFORE replaying. Otherwise the
     // replayed `RUN_STARTED` (which carries the PROVIDER run id, not the
     // client/durability-log run id the pointer is keyed by) trips the
@@ -1907,7 +1929,7 @@ export class ChatClient<
     this.pendingResumeParentRunId = null
     this.pendingResumeItems = null
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    this.currentRunId = runId
+    this.setCurrentRunId(runId)
     this.activeResumeThreadId = resumeThreadId ?? this.threadId
     this.activeResumeRunId = runId
 
@@ -2096,7 +2118,7 @@ export class ChatClient<
         this.currentStreamId = null
         this.devtoolsBridge.setCurrentStreamId(null)
         this.currentMessageId = null
-        this.currentRunId = null
+        this.setCurrentRunId(null)
         this.activeClientTools = null
         this.activeContext = undefined
         this.abortController = null
@@ -2770,6 +2792,9 @@ export class ChatClient<
     if (options.onResumeStateChange !== undefined) {
       this.callbacksRef.current.onResumeStateChange =
         options.onResumeStateChange
+    }
+    if (options.onRunIdChange !== undefined) {
+      this.callbacksRef.current.onRunIdChange = options.onRunIdChange
     }
     if (options.onInterruptStateChange !== undefined) {
       this.callbacksRef.current.onInterruptStateChange =

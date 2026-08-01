@@ -43,9 +43,6 @@ export type {
   ToolApprovalInterrupt,
   ClientContextOptionFromTools,
   ChatResumeState,
-  ChatResumeSnapshot,
-  ChatResumeSnapshotV1,
-  ChatResumeSnapshotV2,
   ChatRequestBody,
   InferChatMessages,
   InferredClientContext,
@@ -70,6 +67,7 @@ export type {
   InferGenerationOutput,
   InferGenerationOutputFromReturn,
   GenerationClientState,
+  GenerationPersistenceOptions,
   GenerationClientOptions,
   GenerationFetcher,
   GenerationFetcherOptions,
@@ -83,8 +81,18 @@ export type {
   TranscriptionGenerateInput,
   SummarizeGenerateInput,
   VideoGenerateInput,
+  GenerationRestoredResult,
 } from './generation-types'
 export { GENERATION_EVENTS } from './generation-types'
+// Per-activity result reconstruction mappers (used by the framework hooks to
+// repaint a typed `result` on restore)
+export {
+  reconstructImageResult,
+  reconstructAudioResult,
+  reconstructSpeechResult,
+  reconstructTranscriptionResult,
+  reconstructSummarizeResult,
+} from './generation-reconstruct'
 export { UnsupportedResponseStreamError } from './response-stream'
 export { clientTools, createChatClientOptions } from './types'
 // Web storage adapters for durable chat persistence (messages + resume snapshot)
@@ -140,10 +148,12 @@ export {
   StreamReconnectLimitError,
   type ConnectConnectionAdapter,
   type ConnectionAdapter,
+  type GenerationHydrationResult,
   type FetchConnectionOptions,
   type ReconnectOptions,
   type ResumableConnectConnectionAdapter,
   type RunAgentInputContext,
+  type StreamConnectionHandlers,
   type SubscribeConnectionAdapter,
   type XhrConnectionOptions,
 } from './connection-adapters'

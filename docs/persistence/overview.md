@@ -24,7 +24,7 @@ TanStack AI solves these with two independent layers. You can use either alone o
 
 ## Install
 
-The server half lives in one package. The client half needs no extra install —
+The server half lives in one package. The client half needs no extra install:
 it ships with the framework package you already use (`@tanstack/ai-react`,
 `-vue`, `-solid`, `-svelte`, `-angular`, or `@tanstack/ai-client`).
 
@@ -39,7 +39,7 @@ your coding assistant, before you write any of it:
 npx @tanstack/intent@latest install
 ```
 
-Run that after the package is installed, not before — Intent scans
+Run that after the package is installed, not before. Intent scans
 `node_modules`, so anything added later needs another run.
 
 ## The two layers
@@ -50,6 +50,48 @@ Run that after the package is installed, not before — Intent scans
 | **State persistence** | "what is the conversation, and is it still there later?" | a durable store (client and/or server) | this section |
 
 They share no code and solve different problems. Delivery durability replays a live byte stream so a dropped connection resumes exactly where it stopped. State persistence stores the conversation itself, so it survives a reload or exists on another device. A replayable stream is not a saved conversation, and a saved conversation is not a live stream. Real apps usually want both.
+
+The two layers also key on different ids. A **thread** (`threadId`) is the
+conversation, the stable identity that survives reloads and exists on every
+device. A **run** (`runId`) is one execution inside it: one streamed answer,
+minted fresh each time. A thread accumulates many runs over its life; delivery
+durability logs one run, state persistence stores the whole thread:
+
+```mermaid
+flowchart TB
+    subgraph thread ["One thread, threadId (stable, the conversation)"]
+        direction LR
+        run1["run r1
+completed"] --> run2["run r2
+completed"] --> run3["run r3
+running"]
+    end
+
+    subgraph delivery ["Delivery durability, one byte log per run"]
+        log["log for r3
+replays the live stream to a reconnecting client"]
+    end
+
+    subgraph state ["State persistence, durable store per thread"]
+        store["transcript, run records, interrupts"]
+    end
+
+    run3 -. "a dropped connection tails" .-> log
+    thread -- "saved on finish, loaded on mount" --> store
+```
+
+Run ids are too ephemeral to reconnect by, since a reloading client may not know the
+current one. Reconnection therefore resolves from the stable `threadId`: the
+store answers "does this thread have a live run?" (`findActiveRun`), and only
+then does the client tail that run's log.
+
+`threadId` is the key every durable record is filed under, on chat and on the
+generation hooks alike, so getting it right is what makes restore work at all.
+[Id map](./id-map) is the short version of both ids: what each means on each side,
+how to choose a thread id, and why a reload never asks for a run id. The protocol
+anatomy of a thread and its runs is in
+[Threads and runs](../chat/streaming#threads-and-runs); what persistence records
+about them is in [Chat persistence](./chat-persistence#threads-runs-and-turns).
 
 ## State persistence has two halves
 
@@ -62,7 +104,7 @@ Persistence runs on the client, the server, or both. They are independent, and t
 
 ### Identity: `Scope` and `threadId`
 
-Server persistence keys conversation history on **`threadId`** — the same
+Server persistence keys conversation history on **`threadId`**, the same
 conversation key as `ChatMiddlewareContext.threadId` and the required field of
 the shared `Scope` type from `@tanstack/ai`. Store APIs take a bare `threadId`
 string for adapter simplicity; multi-user isolation is still required:
@@ -70,8 +112,8 @@ string for adapter simplicity; multi-user isolation is still required:
 - Derive `Scope.userId` / `Scope.tenantId` **server-side** from session state.
 - Authorize before `loadThread` / `saveThread` / `reconstructChat` (use
   `reconstructChat({ authorize })`).
-- Never treat a client-supplied thread id alone as ownership — thread ids are
-  guessable.
+- Never treat a client-supplied thread id alone as ownership, because thread ids
+  are guessable.
 
 `Scope` is re-exported from `@tanstack/ai-persistence` so apps can import the
 identity type next to the store contracts.
@@ -108,10 +150,10 @@ export async function POST(request: Request) {
 
 The client half is one option on `useChat`, `persistence`, and it takes two forms:
 
-- **`persistence: true`** — server-authoritative. The client caches nothing and
+- **`persistence: true`**: server-authoritative. The client caches nothing and
   hydrates the thread from the server by its `threadId` on mount. Pair this with
   the server `withPersistence` above; it is the setup [we recommend](#what-we-recommend).
-- **`persistence: <adapter>`** — client-authoritative. A storage adapter
+- **`persistence: <adapter>`**: client-authoritative. A storage adapter
   (`localStoragePersistence()` / `sessionStoragePersistence()` /
   `indexedDBPersistence()`) keeps the transcript in the browser, no server needed.
 
@@ -218,7 +260,7 @@ export function GET(request: Request): Response | Promise<Response> {
     return resumeServerSentEventsResponse({ adapter: durability })
   }
   // Otherwise rehydrate the conversation from the durable store. `reconstructChat`
-  // reads `?threadId` and returns `{ messages, activeRun }` — the transcript plus
+  // reads `?threadId` and returns `{ messages, activeRun }`: the transcript plus
   // a cursor to any run still generating.
   //
   // Security: without `authorize`, any caller who knows a thread id receives the
@@ -265,6 +307,25 @@ the transcript by message id, so nothing is duplicated or lost. Because the
 reconnect is resolved from the stable `threadId` on the server, a reload and the
 same thread opened on another device resume the same way.
 
+```mermaid
+sequenceDiagram
+    participant Hook as useChat (persistence: true)
+    participant Route as GET /api/chat
+    participant Store as Durable store
+    participant Log as Delivery log
+
+    Note over Hook: page reloads while a run is streaming
+    Hook->>Route: ?threadId=support-chat
+    Route->>Store: reconstructChat, loadThread + findActiveRun
+    Store-->>Route: messages + activeRun (runId)
+    Route-->>Hook: transcript + activeRun cursor
+    Note over Hook: transcript paints
+    Hook->>Route: ?runId=…&offset=-1
+    Route->>Log: resumeServerSentEventsResponse
+    Log-->>Hook: replay + live tail of the run
+    Note over Hook: reply finishes in place
+```
+
 Why this wins over the alternatives:
 
 - **One source of truth.** History lives on the server, so there is no client/server copy to drift or reconcile. The same conversation opens on any device and survives a server restart.
@@ -274,10 +335,27 @@ Why this wins over the alternatives:
 
 Client-only persistence can't do multi-device and bloats storage. Caching everything client-side duplicates the source of truth. This combination avoids both: one server-resolved `GET` on mount restores history and rejoins any live run, so a reload and a second device follow the identical path.
 
+## Generation persistence
+
+Everything above is about chat. Media generation (image, audio, TTS, video, and
+transcription) persists as a sibling to it. The generation hooks
+(`useGenerateImage`, `useGenerateVideo`, …) take a `persistence` option too, so a
+long run's status and result survive a reload or a dropped connection the same
+way a conversation does. Theirs is **boolean only**: the record lives on the
+server, and the browser caches nothing.
+
+On the server it is backed by a `generationRuns` store (the generation
+counterpart to chat's `runs`), with optional `artifacts` + `blobs` stores to keep
+the generated bytes after the provider's URLs expire.
+
+See [Generation persistence](./generation-persistence) for the record's
+lifecycle and the server wiring, and
+[Keep generated files](./keep-generated-files) for byte storage.
+
 ## The store contract
 
 Server **state** persistence is a set of stores. Middleware activates behavior
-from whichever stores are present (with entrypoint requirements — see
+from whichever stores are present (with entrypoint requirements, see
 [Controls](./controls)). There is no separate enable list.
 
 | Store | Purpose |
@@ -286,15 +364,25 @@ from whichever stores are present (with entrypoint requirements — see
 | `runs` | Run status, timing, errors, and usage. Required on full `ChatPersistence`. |
 | `interrupts` | Pending, resolved, or cancelled human/tool waits (needs `runs`). |
 | `metadata` | App and integration key/value state. |
+| `generationRuns` | Generation run status, result metadata, and artifact refs, keyed by the run's own `runId`. Required by generation persistence. |
+| `artifacts` | Generated-file metadata (needs `blobs`). |
+| `blobs` | The generated bytes (needs `artifacts`). |
 
-Named shapes: `ChatTranscriptStores` (messages floor), `ChatPersistenceStores`
-(all four), `ChatWithInterruptsStores`. See [Controls](./controls).
+The last three are the generation counterpart to the chat stores, used by
+`withGenerationPersistence` rather than `withPersistence`, see
+[Generation persistence](./generation-persistence).
+
+Named shapes, covered in [Controls](./controls):
+
+- `ChatTranscriptStores`: the `messages` floor.
+- `ChatPersistenceStores`: all four chat stores.
+- `ChatWithInterruptsStores`: `messages` + `runs` + `interrupts`.
 
 Need a mutex across instances (cross-worker coordination)? Use `withLocks` and a
 `LockStore` from `@tanstack/ai/locks`; see [Locks](../advanced/locks).
 
 `@tanstack/ai-persistence` ships the contracts, the middleware, an in-memory
-reference backend, and a conformance testkit — not a backend for your database.
+reference backend, and a conformance testkit, but not a backend for your database.
 You implement the stores against whatever you already run;
 [Build your own adapter](./build-your-own-adapter) walks through a complete one.
 
@@ -305,9 +393,15 @@ matching your database loads itself. The full skill list is in
 
 ## Where to go next
 
+- [Id map](./id-map): `threadId` vs `runId`, and what each means on chat and on generation.
 - [Chat persistence](./chat-persistence): the server middleware, the authoritative-history contract, and durable interrupts.
 - [Client persistence](./client-persistence): client- vs server-authoritative modes (`persistence: true`), reload restore, storage backends, and mid-stream rejoin.
+- [Generation persistence](./generation-persistence): the same modes for media runs (image, audio, TTS, video, transcription), backed by a `generationRuns` store.
+- [Keep generated files](./keep-generated-files): save the generated bytes to your own storage so they outlive the provider's expiring URLs.
 - [Controls](./controls): compose backends per store and choose which stores to run.
-- [Build your own adapter](./build-your-own-adapter): a complete SQLite example on the core, plus the store interface reference.
+- [Build your own adapter](./build-your-own-adapter): the shape of an adapter, which stores you need, and how to verify one.
+- [Build a chat adapter](./build-your-own-chat-adapter): a complete SQLite walkthrough for the four chat stores.
+- [Build a generation adapter](./build-your-own-generation-adapter): the same for generation runs, artifacts, and blobs.
+- [Store reference](./store-reference): every store method signature and invariant.
 - [Resumable streams](../resumable-streams/overview): the delivery-durability layer in full.
 - [Internals](./internals): the middleware lifecycle and composition mechanics behind every backend.

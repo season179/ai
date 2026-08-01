@@ -46,6 +46,11 @@ function Chat() {
 `localStoragePersistence()` needs no type argument and no codec: it defaults to
 the chat record shape and a JSON codec. That is the whole opt-in.
 
+The `threadId` is doing the real work here: it is the key the record is written
+under and looked up by, so a fresh id per mount restores nothing. Derive it from
+your own domain (a conversation id, a route param). [Id map](./id-map) covers how
+to pick one and how it differs from the `runId` the hook reports.
+
 ## What a reload restores
 
 The client stores one record per `threadId`, the transcript plus a small resume
@@ -70,6 +75,15 @@ pointer. On the next load `useChat` reads it and:
 - **`true`** is server-authoritative.
 - **`false`** (or omitted) is off: messages live in memory only and a reload starts empty.
 
+The generation hooks (`useGenerateImage` / `useGenerateVideo` / …) take a
+`persistence` option too, but theirs is **boolean only**: the record lives on the
+server and the browser caches nothing. They key on `threadId` as well, where it
+names a slot successive runs fill rather than a conversation
+([Id map](./id-map)). A reload restores the last known `status` / `result` /
+`error` for that slot's newest run. It does not restart provider work; only a run
+still streaming against a server-side durable stream is re-attached and finished
+in place. See [Generation persistence](./generation-persistence) for the setup.
+
 ### An adapter: client-authoritative
 
 Pass the adapter directly, `persistence: localStoragePersistence()`. The
@@ -93,7 +107,7 @@ stable key and the server resolves everything from it. No loader, no
 `initialMessages`, no extra props. It needs a connection with a `hydrate` handler
 (every built-in connection has one) and the server `GET` endpoint below.
 
-**Client** — a connection, a stable `threadId`, and `persistence: true`:
+**Client**: a connection, a stable `threadId`, and `persistence: true`:
 
 ```tsx
 import { fetchServerSentEvents, useChat } from '@tanstack/ai-react'
@@ -119,7 +133,7 @@ function Chat({ threadId }: { threadId: string }) {
 }
 ```
 
-**Server** — one `GET` endpoint next to your chat `POST`. Replay the durability
+**Server**: one `GET` endpoint next to your chat `POST`. Replay the durability
 log when the request carries a resume cursor, otherwise return the stored
 conversation with `reconstructChat`:
 
@@ -176,8 +190,8 @@ example during server-side rendering), so constructing one on the server is safe
 ### Writing your own
 
 Any object with `getItem` / `setItem` / `removeItem` works. The record is one
-`{ messages, resume? }` blob per chat id — the transcript plus the pointer that
-lets a reload rejoin an in-flight run — so `setItem` receives that whole record,
+`{ messages, resume? }` blob per chat id (the transcript plus the pointer that
+lets a reload rejoin an in-flight run), so `setItem` receives that whole record,
 not a bare message array:
 
 ```ts
@@ -214,7 +228,7 @@ const persistence: ChatClientPersistence = {
 ```
 
 Reads are best-effort: a `getItem` that throws or returns `null` is treated as
-"nothing stored", so an adapter that parses the wrong shape fails **silently** —
+"nothing stored", so an adapter that parses the wrong shape fails **silently**:
 the conversation just does not come back. Round-trip your adapter once against a
 real reload before shipping it.
 
