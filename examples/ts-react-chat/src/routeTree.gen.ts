@@ -32,6 +32,7 @@ import { Route as GenerationsSummarizeRouteImport } from './routes/generations.s
 import { Route as GenerationsStructuredOutputRouteImport } from './routes/generations.structured-output'
 import { Route as GenerationsStructuredChatRouteImport } from './routes/generations.structured-chat'
 import { Route as GenerationsSpeechRouteImport } from './routes/generations.speech'
+import { Route as GenerationsPersistentGenerationRouteImport } from './routes/generations.persistent-generation'
 import { Route as GenerationsImageRouteImport } from './routes/generations.image'
 import { Route as GenerationsAudioRouteImport } from './routes/generations.audio'
 import { Route as ExampleRuntimeContextRouteImport } from './routes/example.runtime-context'
@@ -57,12 +58,14 @@ import { Route as ApiInterruptsRouteImport } from './routes/api.interrupts'
 import { Route as ApiImageToolReproRouteImport } from './routes/api.image-tool-repro'
 import { Route as ApiImageGenRouteImport } from './routes/api.image-gen'
 import { Route as ApiCapabilityDemoRouteImport } from './routes/api.capability-demo'
+import { Route as ApiArtifactsRouteImport } from './routes/api.artifacts'
 import { Route as ExampleGuitarsIndexRouteImport } from './routes/example.guitars/index'
 import { Route as ExampleGuitarsGuitarIdRouteImport } from './routes/example.guitars/$guitarId'
 import { Route as ApiGenerateVideoRouteImport } from './routes/api.generate.video'
 import { Route as ApiGenerateSpeechRouteImport } from './routes/api.generate.speech'
 import { Route as ApiGenerateImageRouteImport } from './routes/api.generate.image'
 import { Route as ApiGenerateAudioRouteImport } from './routes/api.generate.audio'
+import { Route as ApiGenerateImageArtifactRouteImport } from './routes/api.generate.image.artifact'
 
 const TypesafeToolsRoute = TypesafeToolsRouteImport.update({
   id: '/typesafe-tools',
@@ -182,6 +185,12 @@ const GenerationsSpeechRoute = GenerationsSpeechRouteImport.update({
   path: '/generations/speech',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GenerationsPersistentGenerationRoute =
+  GenerationsPersistentGenerationRouteImport.update({
+    id: '/generations/persistent-generation',
+    path: '/generations/persistent-generation',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const GenerationsImageRoute = GenerationsImageRouteImport.update({
   id: '/generations/image',
   path: '/generations/image',
@@ -307,6 +316,11 @@ const ApiCapabilityDemoRoute = ApiCapabilityDemoRouteImport.update({
   path: '/api/capability-demo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiArtifactsRoute = ApiArtifactsRouteImport.update({
+  id: '/api/artifacts',
+  path: '/api/artifacts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExampleGuitarsIndexRoute = ExampleGuitarsIndexRouteImport.update({
   id: '/example/guitars/',
   path: '/example/guitars/',
@@ -337,6 +351,12 @@ const ApiGenerateAudioRoute = ApiGenerateAudioRouteImport.update({
   path: '/api/generate/audio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGenerateImageArtifactRoute =
+  ApiGenerateImageArtifactRouteImport.update({
+    id: '/artifact',
+    path: '/artifact',
+    getParentRoute: () => ApiGenerateImageRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -356,6 +376,7 @@ export interface FileRoutesByFullPath {
   '/server-fn-chat': typeof ServerFnChatRoute
   '/threads': typeof ThreadsRoute
   '/typesafe-tools': typeof TypesafeToolsRoute
+  '/api/artifacts': typeof ApiArtifactsRoute
   '/api/capability-demo': typeof ApiCapabilityDemoRoute
   '/api/image-gen': typeof ApiImageGenRoute
   '/api/image-tool-repro': typeof ApiImageToolReproRoute
@@ -381,6 +402,7 @@ export interface FileRoutesByFullPath {
   '/example/runtime-context': typeof ExampleRuntimeContextRoute
   '/generations/audio': typeof GenerationsAudioRoute
   '/generations/image': typeof GenerationsImageRoute
+  '/generations/persistent-generation': typeof GenerationsPersistentGenerationRoute
   '/generations/speech': typeof GenerationsSpeechRoute
   '/generations/structured-chat': typeof GenerationsStructuredChatRoute
   '/generations/structured-output': typeof GenerationsStructuredOutputRoute
@@ -388,11 +410,12 @@ export interface FileRoutesByFullPath {
   '/generations/transcription': typeof GenerationsTranscriptionRoute
   '/generations/video': typeof GenerationsVideoRoute
   '/api/generate/audio': typeof ApiGenerateAudioRoute
-  '/api/generate/image': typeof ApiGenerateImageRoute
+  '/api/generate/image': typeof ApiGenerateImageRouteWithChildren
   '/api/generate/speech': typeof ApiGenerateSpeechRoute
   '/api/generate/video': typeof ApiGenerateVideoRoute
   '/example/guitars/$guitarId': typeof ExampleGuitarsGuitarIdRoute
   '/example/guitars/': typeof ExampleGuitarsIndexRoute
+  '/api/generate/image/artifact': typeof ApiGenerateImageArtifactRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -412,6 +435,7 @@ export interface FileRoutesByTo {
   '/server-fn-chat': typeof ServerFnChatRoute
   '/threads': typeof ThreadsRoute
   '/typesafe-tools': typeof TypesafeToolsRoute
+  '/api/artifacts': typeof ApiArtifactsRoute
   '/api/capability-demo': typeof ApiCapabilityDemoRoute
   '/api/image-gen': typeof ApiImageGenRoute
   '/api/image-tool-repro': typeof ApiImageToolReproRoute
@@ -437,6 +461,7 @@ export interface FileRoutesByTo {
   '/example/runtime-context': typeof ExampleRuntimeContextRoute
   '/generations/audio': typeof GenerationsAudioRoute
   '/generations/image': typeof GenerationsImageRoute
+  '/generations/persistent-generation': typeof GenerationsPersistentGenerationRoute
   '/generations/speech': typeof GenerationsSpeechRoute
   '/generations/structured-chat': typeof GenerationsStructuredChatRoute
   '/generations/structured-output': typeof GenerationsStructuredOutputRoute
@@ -444,11 +469,12 @@ export interface FileRoutesByTo {
   '/generations/transcription': typeof GenerationsTranscriptionRoute
   '/generations/video': typeof GenerationsVideoRoute
   '/api/generate/audio': typeof ApiGenerateAudioRoute
-  '/api/generate/image': typeof ApiGenerateImageRoute
+  '/api/generate/image': typeof ApiGenerateImageRouteWithChildren
   '/api/generate/speech': typeof ApiGenerateSpeechRoute
   '/api/generate/video': typeof ApiGenerateVideoRoute
   '/example/guitars/$guitarId': typeof ExampleGuitarsGuitarIdRoute
   '/example/guitars': typeof ExampleGuitarsIndexRoute
+  '/api/generate/image/artifact': typeof ApiGenerateImageArtifactRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -469,6 +495,7 @@ export interface FileRoutesById {
   '/server-fn-chat': typeof ServerFnChatRoute
   '/threads': typeof ThreadsRoute
   '/typesafe-tools': typeof TypesafeToolsRoute
+  '/api/artifacts': typeof ApiArtifactsRoute
   '/api/capability-demo': typeof ApiCapabilityDemoRoute
   '/api/image-gen': typeof ApiImageGenRoute
   '/api/image-tool-repro': typeof ApiImageToolReproRoute
@@ -494,6 +521,7 @@ export interface FileRoutesById {
   '/example/runtime-context': typeof ExampleRuntimeContextRoute
   '/generations/audio': typeof GenerationsAudioRoute
   '/generations/image': typeof GenerationsImageRoute
+  '/generations/persistent-generation': typeof GenerationsPersistentGenerationRoute
   '/generations/speech': typeof GenerationsSpeechRoute
   '/generations/structured-chat': typeof GenerationsStructuredChatRoute
   '/generations/structured-output': typeof GenerationsStructuredOutputRoute
@@ -501,11 +529,12 @@ export interface FileRoutesById {
   '/generations/transcription': typeof GenerationsTranscriptionRoute
   '/generations/video': typeof GenerationsVideoRoute
   '/api/generate/audio': typeof ApiGenerateAudioRoute
-  '/api/generate/image': typeof ApiGenerateImageRoute
+  '/api/generate/image': typeof ApiGenerateImageRouteWithChildren
   '/api/generate/speech': typeof ApiGenerateSpeechRoute
   '/api/generate/video': typeof ApiGenerateVideoRoute
   '/example/guitars/$guitarId': typeof ExampleGuitarsGuitarIdRoute
   '/example/guitars/': typeof ExampleGuitarsIndexRoute
+  '/api/generate/image/artifact': typeof ApiGenerateImageArtifactRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -527,6 +556,7 @@ export interface FileRouteTypes {
     | '/server-fn-chat'
     | '/threads'
     | '/typesafe-tools'
+    | '/api/artifacts'
     | '/api/capability-demo'
     | '/api/image-gen'
     | '/api/image-tool-repro'
@@ -552,6 +582,7 @@ export interface FileRouteTypes {
     | '/example/runtime-context'
     | '/generations/audio'
     | '/generations/image'
+    | '/generations/persistent-generation'
     | '/generations/speech'
     | '/generations/structured-chat'
     | '/generations/structured-output'
@@ -564,6 +595,7 @@ export interface FileRouteTypes {
     | '/api/generate/video'
     | '/example/guitars/$guitarId'
     | '/example/guitars/'
+    | '/api/generate/image/artifact'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -583,6 +615,7 @@ export interface FileRouteTypes {
     | '/server-fn-chat'
     | '/threads'
     | '/typesafe-tools'
+    | '/api/artifacts'
     | '/api/capability-demo'
     | '/api/image-gen'
     | '/api/image-tool-repro'
@@ -608,6 +641,7 @@ export interface FileRouteTypes {
     | '/example/runtime-context'
     | '/generations/audio'
     | '/generations/image'
+    | '/generations/persistent-generation'
     | '/generations/speech'
     | '/generations/structured-chat'
     | '/generations/structured-output'
@@ -620,6 +654,7 @@ export interface FileRouteTypes {
     | '/api/generate/video'
     | '/example/guitars/$guitarId'
     | '/example/guitars'
+    | '/api/generate/image/artifact'
   id:
     | '__root__'
     | '/'
@@ -639,6 +674,7 @@ export interface FileRouteTypes {
     | '/server-fn-chat'
     | '/threads'
     | '/typesafe-tools'
+    | '/api/artifacts'
     | '/api/capability-demo'
     | '/api/image-gen'
     | '/api/image-tool-repro'
@@ -664,6 +700,7 @@ export interface FileRouteTypes {
     | '/example/runtime-context'
     | '/generations/audio'
     | '/generations/image'
+    | '/generations/persistent-generation'
     | '/generations/speech'
     | '/generations/structured-chat'
     | '/generations/structured-output'
@@ -676,6 +713,7 @@ export interface FileRouteTypes {
     | '/api/generate/video'
     | '/example/guitars/$guitarId'
     | '/example/guitars/'
+    | '/api/generate/image/artifact'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -696,6 +734,7 @@ export interface RootRouteChildren {
   ServerFnChatRoute: typeof ServerFnChatRoute
   ThreadsRoute: typeof ThreadsRoute
   TypesafeToolsRoute: typeof TypesafeToolsRoute
+  ApiArtifactsRoute: typeof ApiArtifactsRoute
   ApiCapabilityDemoRoute: typeof ApiCapabilityDemoRoute
   ApiImageGenRoute: typeof ApiImageGenRoute
   ApiImageToolReproRoute: typeof ApiImageToolReproRoute
@@ -721,6 +760,7 @@ export interface RootRouteChildren {
   ExampleRuntimeContextRoute: typeof ExampleRuntimeContextRoute
   GenerationsAudioRoute: typeof GenerationsAudioRoute
   GenerationsImageRoute: typeof GenerationsImageRoute
+  GenerationsPersistentGenerationRoute: typeof GenerationsPersistentGenerationRoute
   GenerationsSpeechRoute: typeof GenerationsSpeechRoute
   GenerationsStructuredChatRoute: typeof GenerationsStructuredChatRoute
   GenerationsStructuredOutputRoute: typeof GenerationsStructuredOutputRoute
@@ -728,7 +768,7 @@ export interface RootRouteChildren {
   GenerationsTranscriptionRoute: typeof GenerationsTranscriptionRoute
   GenerationsVideoRoute: typeof GenerationsVideoRoute
   ApiGenerateAudioRoute: typeof ApiGenerateAudioRoute
-  ApiGenerateImageRoute: typeof ApiGenerateImageRoute
+  ApiGenerateImageRoute: typeof ApiGenerateImageRouteWithChildren
   ApiGenerateSpeechRoute: typeof ApiGenerateSpeechRoute
   ApiGenerateVideoRoute: typeof ApiGenerateVideoRoute
   ExampleGuitarsGuitarIdRoute: typeof ExampleGuitarsGuitarIdRoute
@@ -896,6 +936,13 @@ declare module '@tanstack/react-router' {
       path: '/generations/speech'
       fullPath: '/generations/speech'
       preLoaderRoute: typeof GenerationsSpeechRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/generations/persistent-generation': {
+      id: '/generations/persistent-generation'
+      path: '/generations/persistent-generation'
+      fullPath: '/generations/persistent-generation'
+      preLoaderRoute: typeof GenerationsPersistentGenerationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/generations/image': {
@@ -1073,6 +1120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCapabilityDemoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/artifacts': {
+      id: '/api/artifacts'
+      path: '/api/artifacts'
+      fullPath: '/api/artifacts'
+      preLoaderRoute: typeof ApiArtifactsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/example/guitars/': {
       id: '/example/guitars/'
       path: '/example/guitars'
@@ -1115,8 +1169,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGenerateAudioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/generate/image/artifact': {
+      id: '/api/generate/image/artifact'
+      path: '/artifact'
+      fullPath: '/api/generate/image/artifact'
+      preLoaderRoute: typeof ApiGenerateImageArtifactRouteImport
+      parentRoute: typeof ApiGenerateImageRoute
+    }
   }
 }
+
+interface ApiGenerateImageRouteChildren {
+  ApiGenerateImageArtifactRoute: typeof ApiGenerateImageArtifactRoute
+}
+
+const ApiGenerateImageRouteChildren: ApiGenerateImageRouteChildren = {
+  ApiGenerateImageArtifactRoute: ApiGenerateImageArtifactRoute,
+}
+
+const ApiGenerateImageRouteWithChildren =
+  ApiGenerateImageRoute._addFileChildren(ApiGenerateImageRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -1136,6 +1208,7 @@ const rootRouteChildren: RootRouteChildren = {
   ServerFnChatRoute: ServerFnChatRoute,
   ThreadsRoute: ThreadsRoute,
   TypesafeToolsRoute: TypesafeToolsRoute,
+  ApiArtifactsRoute: ApiArtifactsRoute,
   ApiCapabilityDemoRoute: ApiCapabilityDemoRoute,
   ApiImageGenRoute: ApiImageGenRoute,
   ApiImageToolReproRoute: ApiImageToolReproRoute,
@@ -1161,6 +1234,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExampleRuntimeContextRoute: ExampleRuntimeContextRoute,
   GenerationsAudioRoute: GenerationsAudioRoute,
   GenerationsImageRoute: GenerationsImageRoute,
+  GenerationsPersistentGenerationRoute: GenerationsPersistentGenerationRoute,
   GenerationsSpeechRoute: GenerationsSpeechRoute,
   GenerationsStructuredChatRoute: GenerationsStructuredChatRoute,
   GenerationsStructuredOutputRoute: GenerationsStructuredOutputRoute,
@@ -1168,7 +1242,7 @@ const rootRouteChildren: RootRouteChildren = {
   GenerationsTranscriptionRoute: GenerationsTranscriptionRoute,
   GenerationsVideoRoute: GenerationsVideoRoute,
   ApiGenerateAudioRoute: ApiGenerateAudioRoute,
-  ApiGenerateImageRoute: ApiGenerateImageRoute,
+  ApiGenerateImageRoute: ApiGenerateImageRouteWithChildren,
   ApiGenerateSpeechRoute: ApiGenerateSpeechRoute,
   ApiGenerateVideoRoute: ApiGenerateVideoRoute,
   ExampleGuitarsGuitarIdRoute: ExampleGuitarsGuitarIdRoute,

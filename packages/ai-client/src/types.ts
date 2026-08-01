@@ -37,19 +37,16 @@ export interface ChatResumeState {
 
 export type ChatPendingInterrupt = Interrupt
 
-export interface ChatResumeSnapshotV1 {
-  schemaVersion?: 1
+/**
+ * The durable pointer a chat keeps for the run it may need to rejoin, plus any
+ * interrupt that run is waiting on.
+ *
+ * @internal
+ */
+export interface ChatResumeSnapshot {
   resumeState: ChatResumeState
   pendingInterrupts?: Array<ChatPendingInterrupt>
 }
-
-export interface ChatResumeSnapshotV2 {
-  schemaVersion: 2
-  resumeState: ChatResumeState
-  pendingInterrupts?: Array<ChatPendingInterrupt>
-}
-
-export type ChatResumeSnapshot = ChatResumeSnapshotV1 | ChatResumeSnapshotV2
 
 export type InterruptItemStatus =
   | 'pending'
@@ -876,6 +873,12 @@ export interface ChatClientBaseOptions<
     resumeState: ChatResumeState | null,
     pendingInterrupts: BoundInterrupts<TTools>,
   ) => void
+
+  /**
+   * Callback when the id of the run this client has in flight changes: the new
+   * id when a run starts (a send, or a `joinRun` rejoin), `null` when it settles.
+   */
+  onRunIdChange?: (runId: string | null) => void
 
   /** Callback when the immutable interrupt state snapshot changes. */
   onInterruptStateChange?: (state: ChatInterruptState<TTools>) => void

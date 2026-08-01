@@ -17,7 +17,7 @@ npx @tanstack/intent@latest install
 ```
 
 The second command wires this package's [Agent Skills](../getting-started/agent-skills)
-into your coding assistant. Run it before you start — the recipes read your
+into your coding assistant. Run it before you start, because the recipes read your
 existing database setup and write the adapter to match, and they encode the
 invariants (full-overwrite `saveThread`, insert-if-absent run and interrupt
 creates) that are easy to get wrong and expensive to debug.
@@ -69,6 +69,28 @@ Creating tables on open is convenient for local development. In production, appl
 schema changes through your deployment workflow instead. See
 [Migrations](./migrations).
 
+## Threads, runs, and turns
+
+Threads and runs are protocol concepts, not persistence ones. A **thread**
+(`threadId`) is the stable conversation, a **run** (`runId`) one
+`RUN_STARTED` → `RUN_FINISHED` execution, and one user-visible turn can span
+several runs. [Threads and runs](../chat/streaming#threads-and-runs)
+in the streaming guide covers the anatomy. What persistence adds is the durable
+record of them, anchored on the thread:
+
+- The transcript is stored per `threadId` (the `messages` store).
+- Each run gets a `runs` record with status, timings, and usage. The id is
+  ephemeral, the record is not.
+- A reconnecting client (a reload, or the same thread on another device) never
+  has to present a run id it may no longer know: the store resolves the
+  thread's live run (`findActiveRun(threadId)`) and the client tails that.
+- Interrupt records carry both ids: the `runId` of the execution they paused
+  and the `threadId` of the conversation they live in.
+
+[Id map](./id-map) is the practical companion to this: how to choose a thread
+id, why both client and server must file under the same one, when to read
+`useChat`'s `runId`, and what the same two ids mean on the generation hooks.
+
 ## Send the full transcript, or none of it
 
 `withPersistence` follows one rule, the authoritative-history contract:
@@ -86,9 +108,9 @@ schema changes through your deployment workflow instead. See
 
 | Moment | What is written | Best-effort? |
 | --- | --- | --- |
-| **Start of a run** (`onStart`) | Pending turn (just-submitted user message + prior history) so a reload mid-generation still shows the question | Yes — failure does not abort the run; finish is authoritative |
-| **Interrupt boundary** | New interrupt records, run status `interrupted`, and a thread snapshot of current messages | No — store failures propagate |
-| **Finish** (`onFinish`) | Complete transcript (including the terminal assistant reply with its stream `messageId` for in-place reload identity), run status `completed`, and commit of consumed resumes | No — transcript is saved **before** the run is marked completed |
+| **Start of a run** (`onStart`) | Pending turn (just-submitted user message + prior history) so a reload mid-generation still shows the question | Yes. Failure does not abort the run; finish is authoritative |
+| **Interrupt boundary** | New interrupt records, run status `interrupted`, and a thread snapshot of current messages | No. Store failures propagate |
+| **Finish** (`onFinish`) | Complete transcript (including the terminal assistant reply with its stream `messageId` for in-place reload identity), run status `completed`, and commit of consumed resumes | No. The transcript is saved **before** the run is marked completed |
 | **Optionally while streaming** | Throttled partial assistant text when `snapshotStreaming: true` | Yes |
 
 ```ts group=chat-persistence
@@ -101,10 +123,29 @@ Streaming snapshots default off (finish is the authoritative save); enable
 them to trade extra writes for partial-output durability. Tune the interval
 with `snapshotIntervalMs` (default `1000`).
 
-On **error**, the run is marked `failed`. On **abort**, the run is marked
-`interrupted`. Resumes accepted in `onConfig` are **not** consumed until a
-success boundary (interrupt or finish), so a failed run leaves pending
-interrupts retryable with the same resume batch.
+How a run that does not finish cleanly is recorded:
+
+- On **error**, the run is marked `failed`.
+- On **abort**, the run is marked `interrupted`.
+
+Resumes accepted in `onConfig` are **not** consumed until a success boundary (an
+interrupt or a finish), so a failed run leaves pending interrupts retryable with
+the same resume batch.
+
+Every run record moves through this lifecycle. All three end states are
+terminal for that record, because a continuation after an interrupt is a new run
+with a fresh `runId`:
+
+```mermaid
+stateDiagram-v2
+    [*] --> running : run starts (idempotent createOrResume)
+    running --> completed : finish, transcript saved first
+    running --> failed : error
+    running --> interrupted : interrupt boundary, or abort
+    completed --> [*]
+    failed --> [*]
+    interrupted --> [*] : continuation runs under a new runId
+```
 
 ## Interrupts survive a restart
 
@@ -122,13 +163,25 @@ needs client message history the persistence flow deliberately omits). Resumes
 are committed (resolved/cancelled in the store) only once the run reaches a
 successful interrupt or finish boundary.
 
+An interrupt record is born `pending` and only a commit moves it, which is why
+a failed continuation leaves it answerable again:
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending : run pauses, interrupt recorded
+    pending --> resolved : resume answers it, committed at a success boundary
+    pending --> cancelled : resume cancels it
+    resolved --> [*]
+    cancelled --> [*]
+```
+
 ## Where to go next
 
 - Bring durability to the browser too, so a full page reload restores the
   conversation and rejoins an in-flight run: [Client persistence](./client-persistence).
 - Build the backend on the core, and look up the store contracts:
-  [Build your own adapter](./build-your-own-adapter). Whatever you already run —
-  Drizzle, Prisma, Cloudflare D1, raw SQL — install the shipped
+  [Build your own adapter](./build-your-own-adapter). Whatever you already run
+  (Drizzle, Prisma, Cloudflare D1, raw SQL), install the shipped
   [Agent Skills](../getting-started/agent-skills) with
   `npx @tanstack/intent@latest install` and have your assistant write the
   `chat-persistence.ts` against your existing schema.
