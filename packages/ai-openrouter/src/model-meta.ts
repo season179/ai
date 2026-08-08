@@ -15934,14 +15934,13 @@ type OpenRouterCombinedToolsAndSchemaModelId = {
 }[keyof OpenRouterModelOptionsByName]
 
 const OPENROUTER_COMBINED_TOOLS_AND_SCHEMA_MODEL_IDS = [
-  // Anthropic — the Claude 4.5+ ids the upstream gate currently blesses.
-  // Mirrors ANTHROPIC_COMBINED_TOOLS_AND_SCHEMA_MODELS exactly (it stops at
-  // 4.7), so OpenRouter-routed Claude 4.8 takes the same legacy path as the
-  // native @tanstack/ai-anthropic adapter until upstream adds it.
+  // Anthropic — the Claude 4.5+ ids the upstream gate blesses (plus the
+  // catalog's `-fast` routing variants of those same models). The upstream
+  // gate has since grown 4.8 / Fable 5 / Sonnet 5; OpenRouter-routed ids for
+  // those take the legacy path until added here.
   'anthropic/claude-haiku-4.5',
   'anthropic/claude-opus-4.5',
   'anthropic/claude-opus-4.6',
-  'anthropic/claude-opus-4.6-fast',
   'anthropic/claude-opus-4.7',
   'anthropic/claude-opus-4.7-fast',
   'anthropic/claude-sonnet-4.5',
