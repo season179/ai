@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TypesafeToolsRouteImport } from './routes/typesafe-tools'
 import { Route as ThreadsRouteImport } from './routes/threads'
 import { Route as ServerFnChatRouteImport } from './routes/server-fn-chat'
+import { Route as SandboxesDurableRouteImport } from './routes/sandboxes-durable'
 import { Route as SandboxesRouteImport } from './routes/sandboxes'
 import { Route as ResumableRouteImport } from './routes/resumable'
 import { Route as RealtimeRouteImport } from './routes/realtime'
@@ -41,6 +42,7 @@ import { Route as ApiTanchatRouteImport } from './routes/api.tanchat'
 import { Route as ApiSummarizeRouteImport } from './routes/api.summarize'
 import { Route as ApiStructuredOutputRouteImport } from './routes/api.structured-output'
 import { Route as ApiStructuredChatRouteImport } from './routes/api.structured-chat'
+import { Route as ApiSandboxTriageDurableRouteImport } from './routes/api.sandbox-triage-durable'
 import { Route as ApiSandboxTriageRouteImport } from './routes/api.sandbox-triage'
 import { Route as ApiResumableRouteImport } from './routes/api.resumable'
 import { Route as ApiPersistentChatRouteImport } from './routes/api.persistent-chat'
@@ -80,6 +82,11 @@ const ThreadsRoute = ThreadsRouteImport.update({
 const ServerFnChatRoute = ServerFnChatRouteImport.update({
   id: '/server-fn-chat',
   path: '/server-fn-chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SandboxesDurableRoute = SandboxesDurableRouteImport.update({
+  id: '/sandboxes-durable',
+  path: '/sandboxes-durable',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SandboxesRoute = SandboxesRouteImport.update({
@@ -231,6 +238,11 @@ const ApiStructuredChatRoute = ApiStructuredChatRouteImport.update({
   path: '/api/structured-chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSandboxTriageDurableRoute = ApiSandboxTriageDurableRouteImport.update({
+  id: '/api/sandbox-triage-durable',
+  path: '/api/sandbox-triage-durable',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSandboxTriageRoute = ApiSandboxTriageRouteImport.update({
   id: '/api/sandbox-triage',
   path: '/api/sandbox-triage',
@@ -373,6 +385,7 @@ export interface FileRoutesByFullPath {
   '/realtime': typeof RealtimeRoute
   '/resumable': typeof ResumableRoute
   '/sandboxes': typeof SandboxesRoute
+  '/sandboxes-durable': typeof SandboxesDurableRoute
   '/server-fn-chat': typeof ServerFnChatRoute
   '/threads': typeof ThreadsRoute
   '/typesafe-tools': typeof TypesafeToolsRoute
@@ -394,6 +407,7 @@ export interface FileRoutesByFullPath {
   '/api/persistent-chat': typeof ApiPersistentChatRoute
   '/api/resumable': typeof ApiResumableRoute
   '/api/sandbox-triage': typeof ApiSandboxTriageRoute
+  '/api/sandbox-triage-durable': typeof ApiSandboxTriageDurableRoute
   '/api/structured-chat': typeof ApiStructuredChatRoute
   '/api/structured-output': typeof ApiStructuredOutputRoute
   '/api/summarize': typeof ApiSummarizeRoute
@@ -432,6 +446,7 @@ export interface FileRoutesByTo {
   '/realtime': typeof RealtimeRoute
   '/resumable': typeof ResumableRoute
   '/sandboxes': typeof SandboxesRoute
+  '/sandboxes-durable': typeof SandboxesDurableRoute
   '/server-fn-chat': typeof ServerFnChatRoute
   '/threads': typeof ThreadsRoute
   '/typesafe-tools': typeof TypesafeToolsRoute
@@ -453,6 +468,7 @@ export interface FileRoutesByTo {
   '/api/persistent-chat': typeof ApiPersistentChatRoute
   '/api/resumable': typeof ApiResumableRoute
   '/api/sandbox-triage': typeof ApiSandboxTriageRoute
+  '/api/sandbox-triage-durable': typeof ApiSandboxTriageDurableRoute
   '/api/structured-chat': typeof ApiStructuredChatRoute
   '/api/structured-output': typeof ApiStructuredOutputRoute
   '/api/summarize': typeof ApiSummarizeRoute
@@ -492,6 +508,7 @@ export interface FileRoutesById {
   '/realtime': typeof RealtimeRoute
   '/resumable': typeof ResumableRoute
   '/sandboxes': typeof SandboxesRoute
+  '/sandboxes-durable': typeof SandboxesDurableRoute
   '/server-fn-chat': typeof ServerFnChatRoute
   '/threads': typeof ThreadsRoute
   '/typesafe-tools': typeof TypesafeToolsRoute
@@ -513,6 +530,7 @@ export interface FileRoutesById {
   '/api/persistent-chat': typeof ApiPersistentChatRoute
   '/api/resumable': typeof ApiResumableRoute
   '/api/sandbox-triage': typeof ApiSandboxTriageRoute
+  '/api/sandbox-triage-durable': typeof ApiSandboxTriageDurableRoute
   '/api/structured-chat': typeof ApiStructuredChatRoute
   '/api/structured-output': typeof ApiStructuredOutputRoute
   '/api/summarize': typeof ApiSummarizeRoute
@@ -553,6 +571,7 @@ export interface FileRouteTypes {
     | '/realtime'
     | '/resumable'
     | '/sandboxes'
+    | '/sandboxes-durable'
     | '/server-fn-chat'
     | '/threads'
     | '/typesafe-tools'
@@ -574,6 +593,7 @@ export interface FileRouteTypes {
     | '/api/persistent-chat'
     | '/api/resumable'
     | '/api/sandbox-triage'
+    | '/api/sandbox-triage-durable'
     | '/api/structured-chat'
     | '/api/structured-output'
     | '/api/summarize'
@@ -612,6 +632,7 @@ export interface FileRouteTypes {
     | '/realtime'
     | '/resumable'
     | '/sandboxes'
+    | '/sandboxes-durable'
     | '/server-fn-chat'
     | '/threads'
     | '/typesafe-tools'
@@ -633,6 +654,7 @@ export interface FileRouteTypes {
     | '/api/persistent-chat'
     | '/api/resumable'
     | '/api/sandbox-triage'
+    | '/api/sandbox-triage-durable'
     | '/api/structured-chat'
     | '/api/structured-output'
     | '/api/summarize'
@@ -671,6 +693,7 @@ export interface FileRouteTypes {
     | '/realtime'
     | '/resumable'
     | '/sandboxes'
+    | '/sandboxes-durable'
     | '/server-fn-chat'
     | '/threads'
     | '/typesafe-tools'
@@ -692,6 +715,7 @@ export interface FileRouteTypes {
     | '/api/persistent-chat'
     | '/api/resumable'
     | '/api/sandbox-triage'
+    | '/api/sandbox-triage-durable'
     | '/api/structured-chat'
     | '/api/structured-output'
     | '/api/summarize'
@@ -731,6 +755,7 @@ export interface RootRouteChildren {
   RealtimeRoute: typeof RealtimeRoute
   ResumableRoute: typeof ResumableRoute
   SandboxesRoute: typeof SandboxesRoute
+  SandboxesDurableRoute: typeof SandboxesDurableRoute
   ServerFnChatRoute: typeof ServerFnChatRoute
   ThreadsRoute: typeof ThreadsRoute
   TypesafeToolsRoute: typeof TypesafeToolsRoute
@@ -752,6 +777,7 @@ export interface RootRouteChildren {
   ApiPersistentChatRoute: typeof ApiPersistentChatRoute
   ApiResumableRoute: typeof ApiResumableRoute
   ApiSandboxTriageRoute: typeof ApiSandboxTriageRoute
+  ApiSandboxTriageDurableRoute: typeof ApiSandboxTriageDurableRoute
   ApiStructuredChatRoute: typeof ApiStructuredChatRoute
   ApiStructuredOutputRoute: typeof ApiStructuredOutputRoute
   ApiSummarizeRoute: typeof ApiSummarizeRoute
@@ -796,6 +822,13 @@ declare module '@tanstack/react-router' {
       path: '/server-fn-chat'
       fullPath: '/server-fn-chat'
       preLoaderRoute: typeof ServerFnChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sandboxes-durable': {
+      id: '/sandboxes-durable'
+      path: '/sandboxes-durable'
+      fullPath: '/sandboxes-durable'
+      preLoaderRoute: typeof SandboxesDurableRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sandboxes': {
@@ -999,6 +1032,13 @@ declare module '@tanstack/react-router' {
       path: '/api/structured-chat'
       fullPath: '/api/structured-chat'
       preLoaderRoute: typeof ApiStructuredChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sandbox-triage-durable': {
+      id: '/api/sandbox-triage-durable'
+      path: '/api/sandbox-triage-durable'
+      fullPath: '/api/sandbox-triage-durable'
+      preLoaderRoute: typeof ApiSandboxTriageDurableRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sandbox-triage': {
@@ -1205,6 +1245,7 @@ const rootRouteChildren: RootRouteChildren = {
   RealtimeRoute: RealtimeRoute,
   ResumableRoute: ResumableRoute,
   SandboxesRoute: SandboxesRoute,
+  SandboxesDurableRoute: SandboxesDurableRoute,
   ServerFnChatRoute: ServerFnChatRoute,
   ThreadsRoute: ThreadsRoute,
   TypesafeToolsRoute: TypesafeToolsRoute,
@@ -1226,6 +1267,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPersistentChatRoute: ApiPersistentChatRoute,
   ApiResumableRoute: ApiResumableRoute,
   ApiSandboxTriageRoute: ApiSandboxTriageRoute,
+  ApiSandboxTriageDurableRoute: ApiSandboxTriageDurableRoute,
   ApiStructuredChatRoute: ApiStructuredChatRoute,
   ApiStructuredOutputRoute: ApiStructuredOutputRoute,
   ApiSummarizeRoute: ApiSummarizeRoute,
