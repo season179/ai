@@ -35,7 +35,9 @@ test.describe('Interleaved Text/Args (tools-test page)', () => {
     expect(toolCallParts).toHaveLength(1)
     const part = toolCallParts[0]
     expect(part.name).toBe('get_weather')
-    expect(part.state).toBe('input-complete')
+    // The tool executed and its result streamed back, so the part has moved
+    // past 'input-complete' to its terminal state.
+    expect(part.state).toBe('complete')
     expect(part.arguments).toBe('{"city":"New York City"}')
     // The corrupted pre-fix value was {"city":"New Yo"}.
     expect(part.input).toEqual({ city: 'New York City' })
